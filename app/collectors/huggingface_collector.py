@@ -3,9 +3,9 @@ from typing import List
 
 import requests
 
-from collectors.base import BaseCollector, RawItem
-from config.settings import HF_MODELS_LIMIT
-from utils.logger import get_logger
+from app.collectors.base import BaseCollector, RawItem
+from app.config.settings import HF_MODELS_LIMIT
+from app.utils.logger import get_logger
 
 _log = get_logger("hf_collector")
 
@@ -15,6 +15,23 @@ class HuggingFaceCollector(BaseCollector):
     name = "huggingface"
 
     API_URL = "https://huggingface.co/api/models"
+
+    # NLP 相关的 pipeline tags
+    NLP_PIPELINE_TAGS = {
+        "text-generation", "text2text-generation", "conversational",
+        "question-answering", "summarization", "translation",
+        "token-classification", "text-classification", "sentiment-analysis",
+        "fill-mask", "ner", "pos-tagging", "parsing",
+        "text-to-speech", "automatic-speech-recognition",
+        "embeddings", "feature-extraction",
+    }
+
+    # NLP 相关的关键词标签
+    NLP_TAGS = {
+        "nlp", "text", "language", "llm", "transformer", "language-model",
+        "text-generation", "text-classification", "token-classification",
+        "question-answering", "summarization", "translation", "conversational",
+    }
 
     def collect(self) -> List[RawItem]:
         _log.info("开始采集 HuggingFace 最新模型")
@@ -53,6 +70,14 @@ class HuggingFaceCollector(BaseCollector):
                         pass
 
                 if likes < 5 and downloads < 50:
+                    continue
+
+                # 过滤：只保留 NLP 相关的模型
+                is_nlp = (
+                    (pipeline_tag and pipeline_tag in self.NLP_PIPELINE_TAGS) or
+                    any(tag.lower() in self.NLP_TAGS for tag in tags)
+                )
+                if not is_nlp:
                     continue
 
                 summary = (

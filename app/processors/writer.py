@@ -5,12 +5,13 @@ from typing import List
 
 from openai import OpenAI
 
-from processors.filter import SelectedItem
-from config.settings import (
+from app.processors.filter import SelectedItem
+from app.processors.quality_checker import ArticleQualityChecker, ArticleReviser, QualityCheckResult
+from app.config.settings import (
     DMXAPI_BASE_URL, DMXAPI_API_KEY, LLM_MODEL,
     ARTICLE_MIN_WORDS, ARTICLE_MAX_WORDS,
 )
-from utils.logger import get_logger
+from app.utils.logger import get_logger
 
 _log = get_logger("writer")
 
@@ -28,6 +29,10 @@ class ArticleResult:
 
 class ArticleWriter:
     """文章撰写器 - 两阶段生成公众号文章"""
+
+    # 质量检查相关配置
+    MAX_REVISION_ATTEMPTS = 2  # 最多修订次数
+    PASSING_SCORE = 7          # 通过质量检查的最低分数
 
     OUTLINE_SYSTEM = """你是一位资深科技媒体主编，擅长策划爆款公众号文章。
 
@@ -83,9 +88,12 @@ class ArticleWriter:
             base_url=DMXAPI_BASE_URL,
             api_key=DMXAPI_API_KEY,
         )
+        # 初始化质量检查器和修订器
+        self.quality_checker = ArticleQualityChecker()
+        self.reviser = ArticleReviser()
 
     def write(self, items: List[SelectedItem]) -> ArticleResult:
-        """两阶段生成文章"""
+        """两阶段生成文章（含质量检查）"""
         _log.info("开始生成文章，素材 %d 条", len(items))
 
         # 阶段1: 生成大纲
@@ -105,6 +113,9 @@ class ArticleWriter:
             raise RuntimeError("正文生成失败")
 
         _log.info("正文生成完成，字数: %d", len(content_md))
+
+        # 阶段3: 质量检查与修订
+        content_md = self._quality_check_and_revise(content_md, outline)
 
         # 提取配图提示
         image_prompts = self._extract_image_prompts(outline)
@@ -157,6 +168,9 @@ class ArticleWriter:
             raise RuntimeError("深度分析正文生成失败")
 
         _log.info("深度分析正文生成完成，字数: %d", len(content_md))
+
+        # 质量检查与修订
+        content_md = self._quality_check_and_revise(content_md, outline)
 
         # 提取配图提示
         image_prompts = self._extract_image_prompts(outline)
@@ -252,7 +266,7 @@ class ArticleWriter:
             )
 
             content = response.choices[0].message.content
-            return self._parse_outline(content, fallback_title=item.raw.title)
+            return self._parse_outline(content, fallback_title=selected_item.raw.title)
 
         except Exception as e:
             _log.error("深度分析大纲生成异常: %s", e)
@@ -356,7 +370,7 @@ class ArticleWriter:
             )
 
             content = response.choices[0].message.content
-            return self._parse_outline(content, fallback_title=item.raw.title)
+            return self._parse_outline(content, fallback_title=selected_item.raw.title)
 
         except Exception as e:
             _log.error("大纲生成异常: %s", e)
@@ -401,6 +415,72 @@ class ArticleWriter:
         except Exception as e:
             _log.error("正文生成异常: %s", e)
             return ""
+
+    def _quality_check_and_revise(self, content_md: str, outline: dict) -> str:
+        """质量检查与修订
+
+        如果质量检查不通过，自动进行修订，最多尝试 MAX_REVISION_ATTEMPTS 次。
+
+        Args:
+            content_md: 文章内容
+            outline: 大纲信息
+
+        Returns:
+            修订后的文章内容
+        """
+        _log.info("开始质量检查...")
+
+        # 格式化大纲信息
+        outline_info = json.dumps(outline, ensure_ascii=False, indent=2)
+
+        for attempt in range(self.MAX_REVISION_ATTEMPTS + 1):
+            # 执行质量检查
+            check_result = self.quality_checker.check(content_md, outline_info)
+
+            _log.info(
+                "质量检查完成: 评分=%d/10, 通过=%s",
+                check_result.overall_score,
+                check_result.passed
+            )
+
+            # 如果通过检查，直接返回
+            if check_result.passed:
+                _log.info("文章通过质量检查")
+                return content_md
+
+            # 如果未通过，检查是否还有修订机会
+            if attempt < self.MAX_REVISION_ATTEMPTS:
+                _log.warning(
+                    "质量检查未通过 (评分: %d/10)，开始第 %d 次修订...",
+                    check_result.overall_score,
+                    attempt + 1
+                )
+                # 打印问题摘要
+                self._log_check_issues(check_result)
+
+                # 修订文章
+                content_md = self.reviser.revise(content_md, check_result)
+            else:
+                _log.error(
+                    "质量检查仍未通过 (评分: %d/10)，达到最大修订次数",
+                    check_result.overall_score
+                )
+                self._log_check_issues(check_result)
+
+        return content_md
+
+    def _log_check_issues(self, result: QualityCheckResult):
+        """记录检查问题"""
+        if result.grammar_issues:
+            _log.warning("语法问题: %s", result.grammar_issues[:3])
+        if result.logic_issues:
+            _log.warning("逻辑问题: %s", result.logic_issues[:3])
+        if result.completeness_issues:
+            _log.warning("完整性问题: %s", result.completeness_issues[:3])
+        if result.accuracy_issues:
+            _log.warning("准确性问题: %s", result.accuracy_issues[:3])
+        if result.suggestions:
+            _log.info("改进建议: %s", result.suggestions[:3])
 
     def _format_materials(self, items: List[SelectedItem]) -> str:
         """格式化素材简介"""
@@ -678,6 +758,9 @@ class DeepAnalysisWriter(ArticleWriter):
 
         _log.info("正文生成完成，字数: %d", len(content_md))
 
+        # 质量检查与修订
+        content_md = self._quality_check_and_revise(content_md, outline)
+
         # 提取配图提示
         image_prompts = self._extract_image_prompts(outline)
 
@@ -720,7 +803,7 @@ class DeepAnalysisWriter(ArticleWriter):
             )
 
             content = response.choices[0].message.content
-            return self._parse_outline(content, fallback_title=item.raw.title)
+            return self._parse_outline(content, fallback_title=selected_item.raw.title)
 
         except Exception as e:
             _log.error("深度分析大纲生成异常: %s", e)

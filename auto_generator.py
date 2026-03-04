@@ -29,15 +29,15 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from config.settings import PROJECT_ROOT
-from processors.article_selector import ArticleSelector
-from processors.article_downloader import ArticleDownloader
-from processors.writer import ArticleWriter, DeepAnalysisWriter, ArticleResult
-from imaging.flux_generator import FluxGenerator
-from publisher.draft_creator import DraftCreator
-from storage.local_storage import LocalStorage
-from scheduler import DailyScheduler
-from utils.logger import get_logger
+from app.config.settings import PROJECT_ROOT
+from app.processors.article_selector import ArticleSelector
+from app.processors.article_downloader import ArticleDownloader
+from app.processors.writer import ArticleWriter, DeepAnalysisWriter, ArticleResult
+from app.imaging.flux_generator import FluxGenerator
+from app.publisher.draft_creator import DraftCreator
+from app.storage.local_storage import LocalStorage
+from scripts.scheduler import DailyScheduler
+from app.utils.logger import get_logger
 
 _log = get_logger("auto_generator")
 

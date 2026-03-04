@@ -3,11 +3,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Any
 
-from collectors.base import RawItem
-from processors.filter import SelectedItem
-from processors.writer import ArticleResult
-from config.settings import OUTPUT_BASE_DIR
-from utils.logger import get_logger
+from app.collectors.base import RawItem
+from app.processors.filter import SelectedItem
+from app.processors.writer import ArticleResult
+from app.config.settings import OUTPUT_BASE_DIR
+from app.utils.logger import get_logger
 
 _log = get_logger("storage")
 

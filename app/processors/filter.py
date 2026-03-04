@@ -4,9 +4,9 @@ from typing import List
 
 from openai import OpenAI
 
-from collectors.base import RawItem
-from config.settings import DMXAPI_BASE_URL, DMXAPI_API_KEY, LLM_MODEL
-from utils.logger import get_logger
+from app.collectors.base import RawItem
+from app.config.settings import DMXAPI_BASE_URL, DMXAPI_API_KEY, LLM_MODEL
+from app.utils.logger import get_logger
 
 _log = get_logger("filter")
 

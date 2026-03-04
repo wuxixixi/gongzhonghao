@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from publisher.wechat_client import WeChatClient
-from utils.logger import get_logger
-from utils.retry import retry
+from app.publisher.wechat_client import WeChatClient
+from app.utils.logger import get_logger
+from app.utils.retry import retry
 
 _log = get_logger("media_uploader")
 

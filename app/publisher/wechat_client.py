@@ -4,9 +4,9 @@ from pathlib import Path
 
 import requests
 
-from config.settings import WECHAT_APP_ID, WECHAT_APP_SECRET, PROJECT_ROOT
-from utils.logger import get_logger
-from utils.retry import retry
+from app.config.settings import WECHAT_APP_ID, WECHAT_APP_SECRET, PROJECT_ROOT
+from app.utils.logger import get_logger
+from app.utils.retry import retry
 
 _log = get_logger("wechat_client")
 

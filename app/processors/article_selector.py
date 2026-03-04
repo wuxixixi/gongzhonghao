@@ -13,9 +13,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
-from processors.filter import SelectedItem
-from config.settings import OUTPUT_BASE_DIR
-from utils.logger import get_logger
+from app.processors.filter import SelectedItem
+from app.config.settings import OUTPUT_BASE_DIR
+from app.utils.logger import get_logger
 
 _log = get_logger("article_selector")
 
@@ -117,7 +117,7 @@ class ArticleSelector:
             # 转换为 SelectedItem（需要重新构建 RawItem）
             items = []
             for item_data in data:
-                from collectors.base import RawItem
+                from app.collectors.base import RawItem
                 raw = RawItem(
                     title=item_data.get("title", ""),
                     url=item_data.get("url", ""),
@@ -163,7 +163,7 @@ class ArticleSelector:
 
             items = []
             for item_data in data:
-                from collectors.base import RawItem
+                from app.collectors.base import RawItem
                 raw = RawItem(
                     title=item_data.get("title", ""),
                     url=item_data.get("url", ""),
@@ -228,7 +228,7 @@ def select_article_from_file(file_path: str) -> Optional[SelectedItem]:
 
         items = []
         for item_data in data:
-            from collectors.base import RawItem
+            from app.collectors.base import RawItem
             raw = RawItem(
                 title=item_data.get("title", ""),
                 url=item_data.get("url", ""),

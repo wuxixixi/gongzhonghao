@@ -30,9 +30,9 @@ Windows 定时任务注册命令:
 import argparse
 import sys
 
-from config.settings import PROJECT_ROOT
-from pipeline import Pipeline
-from utils.logger import get_logger
+from app.config.settings import PROJECT_ROOT
+from scripts.pipeline import Pipeline
+from app.utils.logger import get_logger
 
 _log = get_logger("main")
 

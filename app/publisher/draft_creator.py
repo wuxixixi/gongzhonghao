@@ -1,9 +1,9 @@
 from typing import Optional, List
 
-from publisher.wechat_client import WeChatClient
-from publisher.media_uploader import MediaUploader
-from processors.writer import ArticleResult
-from utils.logger import get_logger
+from app.publisher.wechat_client import WeChatClient
+from app.publisher.media_uploader import MediaUploader
+from app.processors.writer import ArticleResult
+from app.utils.logger import get_logger
 
 _log = get_logger("draft_creator")
 

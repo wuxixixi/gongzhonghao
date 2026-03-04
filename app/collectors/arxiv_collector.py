@@ -4,9 +4,9 @@ from typing import List
 
 import arxiv
 
-from collectors.base import BaseCollector, RawItem
-from config.settings import ARXIV_MAX_RESULTS
-from utils.logger import get_logger
+from app.collectors.base import BaseCollector, RawItem
+from app.config.settings import ARXIV_MAX_RESULTS
+from app.utils.logger import get_logger
 
 _log = get_logger("arxiv_collector")
 
@@ -15,8 +15,8 @@ class ArxivCollector(BaseCollector):
 
     name = "arxiv"
 
-    # 关注的分类
-    CATEGORIES = ["cs.AI", "cs.LG", "cs.CL"]
+    # 关注的分类 - 聚焦 NLP 方向
+    CATEGORIES = ["cs.CL", "cs.AI"]  # cs.CL=计算语言学, cs.AI=人工智能(包含NLP相关)
 
     def collect(self) -> List[RawItem]:
         _log.info("开始采集 arXiv 论文 (分类: %s)", self.CATEGORIES)

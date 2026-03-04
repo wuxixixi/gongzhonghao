@@ -5,8 +5,8 @@ from PIL import Image
 import requests
 from io import BytesIO
 
-from config.settings import DMXAPI_BASE_URL, DMXAPI_API_KEY, IMAGE_MODEL
-from utils.logger import get_logger
+from app.config.settings import DMXAPI_BASE_URL, DMXAPI_API_KEY, IMAGE_MODEL
+from app.utils.logger import get_logger
 
 _log = get_logger("flux_generator")
 

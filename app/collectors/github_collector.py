@@ -5,15 +5,19 @@ from typing import List
 import requests
 from bs4 import BeautifulSoup
 
-from collectors.base import BaseCollector, RawItem
-from utils.logger import get_logger
+from app.collectors.base import BaseCollector, RawItem
+from app.utils.logger import get_logger
 
 _log = get_logger("github_collector")
 
-# AI 相关关键词，用于过滤仓库
-AI_KEYWORDS = re.compile(
-    r"\b(ai|ml|llm|gpt|transformer|neural|deep.?learn|machine.?learn|"
-    r"diffusion|agent|rag|langchain|embedding|nlp|vision|multimodal)\b",
+# NLP 相关关键词，用于过滤仓库 - 聚焦自然语言处理方向
+NLP_KEYWORDS = re.compile(
+    r"\b(nlp|natural.?language|llm|large.?language|transformer|bert|gpt|"
+    r"text.?classification|ner|pos.?tagging|parsing|sentiment|question.?answer|"
+    r"text.?generation|embedding|tokenizer|llama|chatgpt|language.?model|"
+    r"seq2seq|text.?understanding|dialogue|conversation|translation|machine.?translat|"
+    r"text.?summariz|information.?extract|knowledge.?graph|rag|langchain|peft|"
+    r"instruction.?tuning|rlhf|DPO|word.?vector|word2vec|token)\b",
     re.IGNORECASE,
 )
 
@@ -22,7 +26,7 @@ class GithubCollector(BaseCollector):
 
     name = "github"
 
-    TRENDING_URL = "https://github.com/trending?since=daily"
+    TRENDING_URL = "https://github.com/trending?since=daily&spoken_language_code="
     HEADERS = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept-Language": "en-US,en;q=0.9",
@@ -75,9 +79,9 @@ class GithubCollector(BaseCollector):
         lang_tag = row.select_one("[itemprop='programmingLanguage']")
         language = lang_tag.get_text(strip=True) if lang_tag else ""
 
-        # 判断是否 AI 相关
+        # 判断是否 NLP 相关
         text_to_check = f"{repo_name} {description} {language}"
-        if not AI_KEYWORDS.search(text_to_check):
+        if not NLP_KEYWORDS.search(text_to_check):
             return None
 
         url = f"https://github.com/{repo_path}"

@@ -16,8 +16,8 @@ import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 import requests
-from config.settings import WECHAT_APP_ID, WECHAT_APP_SECRET
-from utils.logger import get_logger
+from app.config.settings import WECHAT_APP_ID, WECHAT_APP_SECRET
+from app.utils.logger import get_logger
 
 _log = get_logger("test_wechat")
 

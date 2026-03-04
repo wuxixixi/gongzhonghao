@@ -2,7 +2,7 @@ import logging
 import sys
 from pathlib import Path
 from datetime import datetime
-from config.settings import PROJECT_ROOT
+from app.config.settings import PROJECT_ROOT
 
 
 def get_logger(name: str) -> logging.Logger:

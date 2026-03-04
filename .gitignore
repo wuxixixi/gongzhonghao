@@ -42,3 +42,5 @@ storage/cache/
 .wechat_token.json
 *.key
 credentials.json
+data/
+tests/

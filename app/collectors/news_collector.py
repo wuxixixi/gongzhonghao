@@ -3,24 +3,25 @@ from typing import List
 
 from tavily import TavilyClient
 
-from collectors.base import BaseCollector, RawItem
-from config.settings import TAVILY_API_KEY
-from utils.logger import get_logger
+from app.collectors.base import BaseCollector, RawItem
+from app.config.settings import TAVILY_API_KEY
+from app.utils.logger import get_logger
 
 _log = get_logger("news_collector")
 
 
 class NewsCollector(BaseCollector):
-    """使用 Tavily 搜索引擎采集 AI 新闻"""
+    """使用 Tavily 搜索引擎采集 NLP 新闻"""
 
     name = "news"
 
-    # AI 相关搜索关键词
+    # NLP 相关搜索关键词
     SEARCH_QUERIES = [
-        "AI artificial intelligence latest news today",
-        "LLM large language model breakthrough",
-        "OpenAI GPT Claude Gemini new release",
-        "人工智能 AI 最新突破和进展",
+        "NLP natural language processing latest breakthrough",
+        "LLM large language model new research 2024 2025",
+        "text classification NER sentiment analysis research",
+        "transformer BERT GPT architecture research paper",
+        "大语言模型 NLP 中文自然语言处理 最新进展",
     ]
 
     def __init__(self):

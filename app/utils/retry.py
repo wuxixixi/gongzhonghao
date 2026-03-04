@@ -1,6 +1,6 @@
 import time
 import functools
-from utils.logger import get_logger
+from app.utils.logger import get_logger
 
 _log = get_logger("retry")
 

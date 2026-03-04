@@ -5,7 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # 加载 .env
-_env_path = Path(__file__).resolve().parent.parent / ".env"
+_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(_env_path)
 
 
@@ -48,4 +48,4 @@ def get_daily_dir() -> Path:
     return OUTPUT_BASE_DIR / today
 
 # --- 项目根目录 ---
-PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent.parent

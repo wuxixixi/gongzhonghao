@@ -15,9 +15,9 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
-from processors.filter import SelectedItem
-from config.settings import OUTPUT_BASE_DIR
-from utils.logger import get_logger
+from app.processors.filter import SelectedItem
+from app.config.settings import OUTPUT_BASE_DIR
+from app.utils.logger import get_logger
 
 _log = get_logger("article_downloader")
 
