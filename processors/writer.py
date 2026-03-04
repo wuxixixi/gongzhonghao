@@ -206,14 +206,52 @@ class ArticleWriter:
         """解析大纲 JSON"""
         try:
             json_str = content
+
+            # 尝试多种 JSON 提取方式
             if "```json" in content:
                 json_str = content.split("```json")[1].split("```")[0]
             elif "```" in content:
                 json_str = content.split("```")[1].split("```")[0]
-            return json.loads(json_str.strip())
+            elif "{" in content:
+                # 尝试提取第一个 { 到最后一个 }
+                start = content.find("{")
+                end = content.rfind("}") + 1
+                if start != -1 and end > start:
+                    json_str = content[start:end]
+
+            # 清理常见的 JSON 格式问题
+            json_str = json_str.strip()
+            # 修复中文引号
+            json_str = json_str.replace(""", '"').replace(""", '"')
+            json_str = json_str.replace("'", '"').replace("'", '"')
+
+            result = json.loads(json_str)
+
+            # 验证必要字段
+            if "title" not in result:
+                result["title"] = "AI 日报"
+            if "sections" not in result:
+                result["sections"] = []
+
+            return result
+
         except json.JSONDecodeError as e:
-            _log.error("大纲 JSON 解析失败: %s", e)
-            return {}
+            _log.error("大纲 JSON 解析失败: %s，内容片段: %s", e, content[:200])
+            # 返回一个默认大纲结构
+            return {
+                "title": "AI 日报",
+                "digest": "今日AI热点速览",
+                "sections": [],
+                "cover_prompt": "AI technology, digital art, futuristic",
+            }
+        except Exception as e:
+            _log.error("大纲解析异常: %s", e)
+            return {
+                "title": "AI 日报",
+                "digest": "今日AI热点速览",
+                "sections": [],
+                "cover_prompt": "AI technology, digital art, futuristic",
+            }
 
     def _extract_image_prompts(self, outline: dict) -> List[str]:
         """从大纲中提取配图提示"""
