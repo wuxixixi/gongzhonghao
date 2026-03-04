@@ -57,13 +57,16 @@ class FluxGenerator:
     def _generate_image(self, prompt: str, save_path: str, size: str) -> bool:
         """生成并保存图片"""
         try:
+            _log.info("调用图片生成 API: model=%s, size=%s", IMAGE_MODEL, size)
+
             response = self.client.images.generate(
                 model=IMAGE_MODEL,
                 prompt=prompt,
                 size=size,
-                quality="standard",
                 n=1,
             )
+
+            _log.debug("API 响应: %s", response)
 
             image_url = response.data[0].url
             if not image_url:
@@ -71,6 +74,7 @@ class FluxGenerator:
                 return False
 
             # 下载图片
+            _log.info("下载图片: %s", image_url[:80])
             img_response = requests.get(image_url, timeout=60)
             img_response.raise_for_status()
 
