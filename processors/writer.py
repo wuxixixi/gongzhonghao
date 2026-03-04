@@ -83,9 +83,11 @@ class ArticleWriter:
 
         # 阶段1: 生成大纲
         outline = self._generate_outline(items)
-        if not outline:
-            _log.error("大纲生成失败")
-            raise RuntimeError("大纲生成失败")
+
+        # 如果大纲生成失败，使用默认大纲
+        if not outline or not outline.get("sections"):
+            _log.warning("大纲生成失败，使用默认结构")
+            outline = self._create_default_outline(items)
 
         _log.info("大纲生成完成: %s", outline.get("title", ""))
 
@@ -111,6 +113,34 @@ class ArticleWriter:
             cover_prompt=outline.get("cover_prompt", "AI technology, digital art, futuristic"),
             image_prompts=image_prompts,
         )
+
+    def _create_default_outline(self, items: List[SelectedItem]) -> dict:
+        """创建默认大纲结构"""
+        return {
+            "title": "今日AI热点速览",
+            "digest": "一文速览今日AI领域最新动态",
+            "sections": [
+                {
+                    "heading": "行业动态",
+                    "points": ["行业重要新闻"],
+                    "source_indices": [0, 1, 2],
+                    "image_hint": "AI technology news, digital art"
+                },
+                {
+                    "heading": "技术研究",
+                    "points": ["学术研究进展"],
+                    "source_indices": [3, 4, 5],
+                    "image_hint": "AI research, futuristic lab"
+                },
+                {
+                    "heading": "开源项目",
+                    "points": ["热门开源项目"],
+                    "source_indices": [6, 7],
+                    "image_hint": "Open source code, tech illustration"
+                }
+            ],
+            "cover_prompt": "AI technology, digital art, futuristic, news headline"
+        }
 
     def _generate_outline(self, items: List[SelectedItem]) -> dict:
         """阶段1: 生成大纲"""
