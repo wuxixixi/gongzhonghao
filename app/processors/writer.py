@@ -370,7 +370,9 @@ class ArticleWriter:
             )
 
             content = response.choices[0].message.content
-            return self._parse_outline(content, fallback_title=selected_item.raw.title)
+            # 获取第一个文章的标题作为 fallback
+            fallback_title = items[0].raw.title if items else ""
+            return self._parse_outline(content, fallback_title=fallback_title)
 
         except Exception as e:
             _log.error("大纲生成异常: %s", e)
