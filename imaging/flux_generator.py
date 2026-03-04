@@ -19,7 +19,7 @@ class FluxGenerator:
 
     # 图片尺寸
     COVER_SIZE = "1792x1024"      # 封面图 (16:9)
-    INLINE_SIZE = "1024x1024"     # 配图 (1:1)
+    INLINE_SIZE = "1024x768"       # 配图 (4:3 横向)
 
     def __init__(self):
         self.client = OpenAI(

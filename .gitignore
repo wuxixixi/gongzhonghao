@@ -37,3 +37,8 @@ storage/cache/
 25*/
 26*/
 .qoder/
+
+# 敏感文件
+.wechat_token.json
+*.key
+credentials.json

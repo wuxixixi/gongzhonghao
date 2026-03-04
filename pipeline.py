@@ -1,6 +1,7 @@
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 
 from collectors.base import RawItem
@@ -36,8 +37,65 @@ class Pipeline:
             HuggingFaceCollector(),
         ]
 
-    def run(self, skip_publish: bool = False) -> dict:
-        """执行完整流水线"""
+    def _load_existing_article(self) -> Optional[ArticleResult]:
+        """检查并加载已有文章"""
+        article_md = self.storage.get_today_dir() / "article.md"
+        article_html = self.storage.get_today_dir() / "article.html"
+
+        if not article_md.exists():
+            return None
+
+        _log.info("发现已有文章: %s", article_md)
+
+        # 读取文章内容
+        with open(article_md, "r", encoding="utf-8") as f:
+            content_md = f.read()
+
+        with open(article_html, "r", encoding="utf-8") as f:
+            content_html = f.read()
+
+        # 提取标题（第一行 # 开头）
+        lines = content_md.strip().split("\n")
+        title = lines[0].replace("#", "").strip() if lines else "AI日报"
+
+        # 提取摘要（从 selected_data.json）
+        import json
+        selected_data_path = self.storage.get_today_dir() / "selected_data.json"
+        digest = ""
+        if selected_data_path.exists():
+            try:
+                with open(selected_data_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if data:
+                        digest = f"今日AI热点速览，共{len(data)}条精选资讯"
+            except:
+                pass
+
+        # 检查已有图片
+        cover_path = self.storage.get_today_dir() / "cover.png"
+        image_paths = []
+        for i in range(1, 4):
+            img_path = self.storage.get_today_dir() / f"image_{i}.png"
+            if img_path.exists():
+                image_paths.append(str(img_path))
+
+        return ArticleResult(
+            title=title,
+            content_markdown=content_md,
+            content_html=content_html,
+            digest=digest,
+            cover_prompt="AI technology, digital art, futuristic",
+            image_prompts=["AI technology illustration"] * 3,
+        ), str(cover_path) if cover_path.exists() else None, image_paths
+
+    def run(self, skip_publish: bool = False, force_regenerate: bool = False) -> dict:
+        """
+        执行完整流水线
+
+        Args:
+            skip_publish: 是否跳过发布步骤
+            force_regenerate: 是否强制重新生成（忽略已有文章）
+        """
         start_time = time.time()
         report = {
             "status": "success",
@@ -47,10 +105,42 @@ class Pipeline:
             "images_generated": 0,
             "draft_created": False,
             "errors": [],
-            "duration_seconds": 0,  # 预设默认值
+            "duration_seconds": 0,
+            "from_cache": False,
         }
 
         try:
+            # 检查是否已有文章
+            if not force_regenerate:
+                existing = self._load_existing_article()
+                if existing:
+                    article, cover_path, image_paths = existing
+                    report["article_title"] = article.title
+                    report["from_cache"] = True
+                    _log.info("使用已有文章，跳过采集和写作")
+
+                    # 检查图片数量
+                    report["images_generated"] = (1 if cover_path else 0) + len(image_paths)
+
+                    # 直接进入发布步骤
+                    if not skip_publish:
+                        _log.info("=" * 50)
+                        _log.info("开始发布草稿...")
+                        try:
+                            draft_id = self.draft_creator.create_draft(
+                                article=article,
+                                cover_image_path=cover_path,
+                                inline_images=image_paths,
+                            )
+                            report["draft_created"] = bool(draft_id)
+                        except Exception as e:
+                            _log.warning("发布失败: %s", e)
+                            report["errors"].append(f"发布失败: {e}")
+                    else:
+                        _log.info("跳过发布步骤")
+
+                    return self._finalize_report(report, start_time)
+
             # Step 1: 并发采集
             _log.info("=" * 50)
             _log.info("开始采集...")

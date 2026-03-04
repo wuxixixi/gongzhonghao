@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 from publisher.wechat_client import WeChatClient
 from publisher.media_uploader import MediaUploader
@@ -19,25 +19,35 @@ class DraftCreator:
         self,
         article: ArticleResult,
         cover_image_path: Optional[str] = None,
-        inline_images: Optional[list[str]] = None,
+        inline_images: Optional[List[str]] = None,
     ) -> str:
-        """创建草稿，返回 media_id"""
+        """
+        创建草稿，返回 media_id
+
+        Args:
+            article: 文章内容
+            cover_image_path: 封面图路径
+            inline_images: 正文中配图路径列表
+
+        Returns:
+            草稿的 media_id
+        """
         _log.info("创建草稿: %s", article.title)
 
-        # 上传封面图
+        # Step 1: 上传封面图为永久素材
         thumb_media_id = ""
         if cover_image_path:
             try:
-                thumb_media_id = self.uploader.upload_image(cover_image_path)
+                thumb_media_id = self.uploader.upload_thumb(cover_image_path)
             except Exception as e:
                 _log.warning("封面上传失败: %s", e)
 
-        # 处理内嵌图片
+        # Step 2: 处理正文中的图片
         content = article.content_html
         if inline_images:
             content = self._embed_images(content, inline_images)
 
-        # 构建草稿数据
+        # Step 3: 构建草稿数据
         articles_data = {
             "articles": [
                 {
@@ -53,25 +63,37 @@ class DraftCreator:
             ]
         }
 
-        # 调用 API
+        # Step 4: 调用 API
         result = self.client.request("POST", "/draft/add", json=articles_data)
         media_id = result.get("media_id", "")
 
         _log.info("草稿创建成功，media_id: %s", media_id)
         return media_id
 
-    def _embed_images(self, content: str, image_paths: list[str]) -> str:
-        """将图片嵌入文章内容"""
+    def _embed_images(self, content: str, image_paths: List[str]) -> str:
+        """
+        将图片嵌入文章内容
+
+        使用 /media/uploadimg 接口上传图片获取 URL，
+        然后替换文章中的图片占位符
+        """
         for i, path in enumerate(image_paths[:3], start=1):
-            # 替换 Markdown 格式的图片占位符
             placeholder = f"image_{i}.png"
+
             try:
-                media_id = self.uploader.upload_image(path)
-                # 微信图文中的图片需要使用特殊格式
-                img_tag = f'<img src="https://mmbiz.qpic.cn/mmbiz_png/{media_id}/0" alt="配图{i}" style="max-width:100%">'
-                content = content.replace(f'img src="{placeholder}"', f'img src="https://mmbiz.qpic.cn/mmbiz_png/{media_id}/0"')
-                content = content.replace(f"({placeholder})", f'(https://mmbiz.qpic.cn/mmbiz_png/{media_id}/0)')
+                # 上传正文图片，获取 URL
+                image_url = self.uploader.upload_content_image(path)
+
+                # 替换占位符为实际 URL
+                # 替换 Markdown 格式
+                content = content.replace(f"({placeholder})", f"({image_url})")
+                # 替换 HTML 格式
+                content = content.replace(f'src="{placeholder}"', f'src="{image_url}"')
+                content = content.replace(f"src='{placeholder}'", f"src='{image_url}'")
+
+                _log.info("正文图片 %d 已嵌入", i)
+
             except Exception as e:
-                _log.warning("内嵌图片 %d 上传失败: %s", i, e)
+                _log.warning("正文图片 %d 上传失败: %s", i, e)
 
         return content

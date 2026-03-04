@@ -36,8 +36,8 @@ TAVILY_API_KEY: str = _require("TAVILY_API_KEY")
 TAVILY_API_URL: str = os.getenv("TAVILY_API_URL", "https://api.tavily.com")
 
 # --- 文章 ---
-ARTICLE_MIN_WORDS: int = int(os.getenv("ARTICLE_MIN_WORDS", "2000"))
-ARTICLE_MAX_WORDS: int = int(os.getenv("ARTICLE_MAX_WORDS", "3000"))
+ARTICLE_MIN_WORDS: int = int(os.getenv("ARTICLE_MIN_WORDS", "3000"))
+ARTICLE_MAX_WORDS: int = int(os.getenv("ARTICLE_MAX_WORDS", "4000"))
 
 # --- 存储 ---
 OUTPUT_BASE_DIR: Path = Path(os.getenv("OUTPUT_BASE_DIR", r"D:\公众号"))
