@@ -1,12 +1,13 @@
 from typing import List, Optional
 
-from openai import OpenAI
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
 from PIL import Image
 import requests
 from io import BytesIO
 
 from app.config.settings import DMXAPI_BASE_URL, DMXAPI_API_KEY, IMAGE_MODEL
 from app.utils.logger import get_logger
+from app.utils.retry import with_retry, with_circuit_breaker
 
 _log = get_logger("flux_generator")
 
@@ -19,7 +20,7 @@ class FluxGenerator:
 
     # 图片尺寸
     COVER_SIZE = "1792x1024"      # 封面图 (16:9)
-    INLINE_SIZE = "1024x768"       # 配图 (4:3 横向)
+    INLINE_SIZE = "1024x1024"      # 配图 (正方形，flux-2-pro 支持)
 
     def __init__(self):
         self.client = OpenAI(
@@ -54,8 +55,19 @@ class FluxGenerator:
 
         return saved_paths
 
+    @with_retry(
+        max_retries=3,
+        base_delay=2.0,
+        retry_exceptions=(APIError, RateLimitError, APIConnectionError, requests.RequestException),
+    )
+    @with_circuit_breaker(
+        name="flux_image_generation",
+        failure_threshold=5,
+        recovery_timeout=300.0,
+        expected_exception=(Exception,),
+    )
     def _generate_image(self, prompt: str, save_path: str, size: str) -> bool:
-        """生成并保存图片"""
+        """生成并保存图片（带重试和断路器保护）"""
         try:
             _log.info("调用图片生成 API: model=%s, size=%s", IMAGE_MODEL, size)
 
@@ -73,21 +85,30 @@ class FluxGenerator:
                 _log.warning("未返回图片 URL")
                 return False
 
-            # 下载图片
-            _log.info("下载图片: %s", image_url[:80])
-            img_response = requests.get(image_url, timeout=60)
-            img_response.raise_for_status()
-
-            # 保存图片
-            img = Image.open(BytesIO(img_response.content))
-            img.save(save_path, "PNG")
+            # 下载图片（带重试）
+            self._download_image_with_retry(image_url, save_path)
 
             _log.info("图片已保存: %s", save_path)
             return True
 
         except Exception as e:
             _log.warning("图片生成失败: %s", e)
-            return False
+            raise  # 重新抛出以便重试机制捕获
+
+    @with_retry(
+        max_retries=3,
+        base_delay=1.0,
+        retry_exceptions=(requests.RequestException,),
+    )
+    def _download_image_with_retry(self, image_url: str, save_path: str) -> None:
+        """下载图片（带重试）"""
+        _log.info("下载图片: %s", image_url[:80])
+        img_response = requests.get(image_url, timeout=60)
+        img_response.raise_for_status()
+
+        # 保存图片
+        img = Image.open(BytesIO(img_response.content))
+        img.save(save_path, "PNG")
 
     def generate_all(
         self,

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(curl:*)",
+      "Bash(echo:*)",
+      "Bash(ping:*)",
+      "Bash(find .:*)",
+      "Bash(schtasks:*)",
+      "Bash(cmd:*)",
+      "Bash(powershell:*)",
+      "Bash(taskoutput bv46w8qpd:*)"
+    ]
+  }
+}

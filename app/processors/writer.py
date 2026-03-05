@@ -10,6 +10,7 @@ from app.processors.quality_checker import ArticleQualityChecker, ArticleReviser
 from app.config.settings import (
     DMXAPI_BASE_URL, DMXAPI_API_KEY, LLM_MODEL,
     ARTICLE_MIN_WORDS, ARTICLE_MAX_WORDS,
+    LLM_PROVIDER, OLLAMA_BASE_URL, OLLAMA_MODEL,
 )
 from app.utils.logger import get_logger
 
@@ -84,10 +85,27 @@ class ArticleWriter:
 - 用 ![图片描述](image_n.png) 标记配图位置（n 为 1,2,3）"""
 
     def __init__(self):
-        self.client = OpenAI(
-            base_url=DMXAPI_BASE_URL,
-            api_key=DMXAPI_API_KEY,
-        )
+        self.provider = LLM_PROVIDER
+        self.ollama_base_url = OLLAMA_BASE_URL
+        self.ollama_model = OLLAMA_MODEL
+
+        if self.provider == "ollama":
+            # 使用 Ollama 本地模型
+            _log.info("使用 Ollama 本地模型: %s @ %s", self.ollama_model, self.ollama_base_url)
+            self.client = OpenAI(
+                base_url=f"{self.ollama_base_url}/v1",
+                api_key="ollama",  # Ollama 不需要 API key
+            )
+            self.model = self.ollama_model
+        else:
+            # 使用 DMXAPI
+            _log.info("使用 DMXAPI 云端模型: %s", LLM_MODEL)
+            self.client = OpenAI(
+                base_url=DMXAPI_BASE_URL,
+                api_key=DMXAPI_API_KEY,
+            )
+            self.model = LLM_MODEL
+
         # 初始化质量检查器和修订器
         self.quality_checker = ArticleQualityChecker()
         self.reviser = ArticleReviser()
@@ -256,7 +274,7 @@ class ArticleWriter:
 
         try:
             response = self.client.chat.completions.create(
-                model=LLM_MODEL,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": self.DEEP_ANALYSIS_OUTLINE_SYSTEM},
                     {"role": "user", "content": user_message},
@@ -304,7 +322,7 @@ class ArticleWriter:
 
         try:
             response = self.client.chat.completions.create(
-                model=LLM_MODEL,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
@@ -360,7 +378,7 @@ class ArticleWriter:
 
         try:
             response = self.client.chat.completions.create(
-                model=LLM_MODEL,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": self.OUTLINE_SYSTEM},
                     {"role": "user", "content": user_message},
@@ -403,7 +421,7 @@ class ArticleWriter:
 
         try:
             response = self.client.chat.completions.create(
-                model=LLM_MODEL,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
@@ -795,7 +813,7 @@ class DeepAnalysisWriter(ArticleWriter):
 
         try:
             response = self.client.chat.completions.create(
-                model=LLM_MODEL,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": DEEP_ANALYSIS_OUTLINE_SYSTEM},
                     {"role": "user", "content": user_message},
@@ -805,7 +823,7 @@ class DeepAnalysisWriter(ArticleWriter):
             )
 
             content = response.choices[0].message.content
-            return self._parse_outline(content, fallback_title=selected_item.raw.title)
+            return self._parse_outline(content, fallback_title=item.raw.title)
 
         except Exception as e:
             _log.error("深度分析大纲生成异常: %s", e)
@@ -843,7 +861,7 @@ class DeepAnalysisWriter(ArticleWriter):
 
         try:
             response = self.client.chat.completions.create(
-                model=LLM_MODEL,
+                model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},

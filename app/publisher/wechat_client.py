@@ -6,7 +6,7 @@ import requests
 
 from app.config.settings import WECHAT_APP_ID, WECHAT_APP_SECRET, PROJECT_ROOT
 from app.utils.logger import get_logger
-from app.utils.retry import retry
+from app.utils.retry import with_retry, with_circuit_breaker, CircuitBreakerOpen
 
 _log = get_logger("wechat_client")
 
@@ -73,9 +73,13 @@ class WeChatClient:
         except Exception as e:
             _log.warning("保存 token 缓存失败: %s", e)
 
-    @retry(max_attempts=3, delay=2.0, exceptions=(Exception,))
+    @with_retry(
+        max_retries=3,
+        base_delay=2.0,
+        retry_exceptions=(requests.RequestException,),
+    )
     def _refresh_token(self) -> str:
-        """刷新 access_token"""
+        """刷新 access_token（带重试）"""
         url = f"{self.BASE_URL}/token"
         params = {
             "grant_type": "client_credential",
@@ -119,8 +123,19 @@ class WeChatClient:
         _log.info("access_token 已刷新")
         return self._access_token
 
+    @with_retry(
+        max_retries=3,
+        base_delay=2.0,
+        retry_exceptions=(requests.RequestException,),
+    )
+    @with_circuit_breaker(
+        name="wechat_api",
+        failure_threshold=5,
+        recovery_timeout=300.0,
+        expected_exception=(Exception,),
+    )
     def request(self, method: str, path: str, **kwargs) -> dict:
-        """发送 API 请求"""
+        """发送 API 请求（带重试和断路器保护）"""
         url = f"{self.BASE_URL}{path}"
         params = kwargs.pop("params", {})
         params["access_token"] = self.access_token
@@ -136,7 +151,7 @@ class WeChatClient:
         resp.raise_for_status()
         data = resp.json()
 
-        # 处理 token 失效，自动刷新后重试一次
+        # 处理 token 失效，自动刷新后重试
         if "errcode" in data:
             errcode = data.get("errcode", 0)
             if errcode == 40001 or errcode == 42001:  # invalid credential or token expired

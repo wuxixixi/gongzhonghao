@@ -20,7 +20,6 @@ wheels/
 *.egg
 
 .env
-.env.example
 *.log
 logs/
 

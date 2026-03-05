@@ -33,7 +33,7 @@ from app.config.settings import PROJECT_ROOT
 from app.processors.article_selector import ArticleSelector
 from app.processors.article_downloader import ArticleDownloader
 from app.processors.writer import ArticleWriter, DeepAnalysisWriter, ArticleResult
-from app.imaging.flux_generator import FluxGenerator
+from app.imaging.ideogram_generator import IdeogramGenerator
 from app.publisher.draft_creator import DraftCreator
 from app.storage.local_storage import LocalStorage
 from scripts.scheduler import DailyScheduler
@@ -50,7 +50,7 @@ class AutoArticleGenerator:
         self.selector = ArticleSelector()
         self.downloader = ArticleDownloader()
         self.writer = DeepAnalysisWriter()  # 使用深度分析写作器
-        self.image_gen = FluxGenerator()
+        self.image_gen = IdeogramGenerator()
         self.draft_creator = DraftCreator()
 
     def generate(

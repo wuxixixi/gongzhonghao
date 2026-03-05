@@ -17,11 +17,22 @@ def _require(key: str) -> str:
     return val
 
 
-# --- LLM ---
+# --- LLM Provider Selection ---
+LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "dmxapi")  # "ollama" or "dmxapi"
+
+# --- Ollama (Local LLM) ---
+OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "glm-5:cloud")
+
+# --- DMXAPI (Cloud API) ---
 DMXAPI_BASE_URL: str = _require("DMXAPI_BASE_URL")
 DMXAPI_API_KEY: str = _require("DMXAPI_API_KEY")
 LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
 IMAGE_MODEL: str = os.getenv("IMAGE_MODEL", "flux")
+
+# --- Ideogram V3 (Image Generation) ---
+IDEOGRAM_API_KEY: str = os.getenv("IDEOGRAM_API_KEY", "")
+IDEOGRAM_API_URL: str = os.getenv("IDEOGRAM_API_URL", "https://aihubmix.com/api/IdeogramAI/ideogram/generate")
 
 # --- 微信 ---
 WECHAT_APP_ID: str = _require("WECHAT_APP_ID")
