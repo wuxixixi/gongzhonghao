@@ -9,7 +9,8 @@ from collectors.arxiv_collector import ArxivCollector
 from collectors.news_collector import NewsCollector
 from collectors.github_collector import GithubCollector
 from collectors.huggingface_collector import HuggingFaceCollector
-from processors.filter import HotFilter, SelectedItem
+from processors.filter import SelectedItem
+from processors.multi_stage_filter import create_multi_stage_filter
 from processors.writer import ArticleWriter, ArticleResult
 from imaging.flux_generator import FluxGenerator
 from publisher.draft_creator import DraftCreator
@@ -24,7 +25,11 @@ class Pipeline:
 
     def __init__(self):
         self.storage = LocalStorage()
-        self.filter = HotFilter()
+        # 使用新的多级筛选器替代 HotFilter
+        self.filter = create_multi_stage_filter(
+            stage4_sample_size=15,  # 进入LLM深度评估的素材数量
+            final_output_size=10,   # 最终输出素材数量
+        )
         self.writer = ArticleWriter()
         self.image_gen = FluxGenerator()
         self.draft_creator = DraftCreator()
