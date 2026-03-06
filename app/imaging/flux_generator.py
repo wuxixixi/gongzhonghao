@@ -1,4 +1,5 @@
 from typing import List, Optional
+import os
 
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
 from PIL import Image
@@ -14,6 +15,9 @@ _log = get_logger("flux_generator")
 # 风格后缀，统一追加到所有提示词
 STYLE_SUFFIX = ", digital art, tech aesthetic, clean design, high quality"
 
+# 图片最小有效大小（字节），用于验证下载的图片
+MIN_IMAGE_SIZE = 1000
+
 
 class FluxGenerator:
     """Flux 图片生成器 - 通过 dmxapi 调用"""
@@ -22,6 +26,9 @@ class FluxGenerator:
     COVER_SIZE = "1792x1024"      # 封面图 (16:9)
     INLINE_SIZE = "1024x1024"      # 配图 (正方形，flux-2-pro 支持)
 
+    # 单张图片最大重试次数
+    MAX_SINGLE_IMAGE_RETRIES = 2
+
     def __init__(self):
         self.client = OpenAI(
             base_url=DMXAPI_BASE_URL,
@@ -29,11 +36,30 @@ class FluxGenerator:
         )
 
     def generate_cover(self, prompt: str, save_path: str) -> bool:
-        """生成封面图"""
+        """生成封面图（带重试）"""
         full_prompt = prompt + STYLE_SUFFIX
         _log.info("生成封面图: %s", full_prompt[:50])
 
-        return self._generate_image(full_prompt, save_path, self.COVER_SIZE)
+        # 封面图重试逻辑
+        for attempt in range(self.MAX_SINGLE_IMAGE_RETRIES + 1):
+            try:
+                if self._generate_image(full_prompt, save_path, self.COVER_SIZE):
+                    # 验证图片
+                    if self._validate_image(save_path):
+                        return True
+                    else:
+                        _log.warning("封面图验证失败，尝试重新生成")
+                        if os.path.exists(save_path):
+                            os.remove(save_path)
+            except Exception as e:
+                _log.warning("封面图生成失败 (尝试 %d/%d): %s",
+                            attempt + 1, self.MAX_SINGLE_IMAGE_RETRIES + 1, e)
+
+            if attempt < self.MAX_SINGLE_IMAGE_RETRIES:
+                _log.info("封面图将进行第 %d 次重试", attempt + 2)
+
+        _log.error("封面图最终生成失败")
+        return False
 
     def generate_inline_images(
         self,
@@ -41,7 +67,7 @@ class FluxGenerator:
         save_dir: str,
         prefix: str = "image"
     ) -> List[str]:
-        """生成多张配图"""
+        """生成多张配图（单张失败会重试）"""
         saved_paths = []
 
         for i, prompt in enumerate(prompts[:3], start=1):
@@ -50,10 +76,58 @@ class FluxGenerator:
 
             _log.info("生成配图 %d: %s", i, full_prompt[:50])
 
-            if self._generate_image(full_prompt, save_path, self.INLINE_SIZE):
-                saved_paths.append(save_path)
+            # 单张图片重试逻辑
+            success = False
+            for attempt in range(self.MAX_SINGLE_IMAGE_RETRIES + 1):
+                try:
+                    if self._generate_image(full_prompt, save_path, self.INLINE_SIZE):
+                        # 验证图片
+                        if self._validate_image(save_path):
+                            saved_paths.append(save_path)
+                            success = True
+                            break
+                        else:
+                            _log.warning("配图 %d 验证失败，尝试重新生成", i)
+                            # 删除无效图片
+                            if os.path.exists(save_path):
+                                os.remove(save_path)
+                except Exception as e:
+                    _log.warning("配图 %d 生成失败 (尝试 %d/%d): %s",
+                                i, attempt + 1, self.MAX_SINGLE_IMAGE_RETRIES + 1, e)
+
+                if attempt < self.MAX_SINGLE_IMAGE_RETRIES:
+                    _log.info("配图 %d 将进行第 %d 次重试", i, attempt + 2)
+
+            if not success:
+                _log.error("配图 %d 最终生成失败，跳过", i)
 
         return saved_paths
+
+    def _validate_image(self, image_path: str) -> bool:
+        """验证图片是否有效"""
+        try:
+            # 检查文件是否存在
+            if not os.path.exists(image_path):
+                return False
+
+            # 检查文件大小
+            file_size = os.path.getsize(image_path)
+            if file_size < MIN_IMAGE_SIZE:
+                _log.warning("图片文件过小: %d bytes", file_size)
+                return False
+
+            # 尝试打开图片验证格式
+            with Image.open(image_path) as img:
+                img.verify()
+
+            # 再次打开确认可读取
+            with Image.open(image_path) as img:
+                img.load()
+
+            return True
+        except Exception as e:
+            _log.warning("图片验证失败: %s", e)
+            return False
 
     @with_retry(
         max_retries=3,

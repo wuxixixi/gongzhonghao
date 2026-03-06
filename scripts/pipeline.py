@@ -11,9 +11,7 @@ from app.collectors.github_collector import GithubCollector
 from app.collectors.huggingface_collector import HuggingFaceCollector
 from app.processors.filter import HotFilter, SelectedItem
 from app.processors.writer import ArticleWriter, ArticleResult
-from app.imaging.flux_generator import FluxGenerator
-from app.imaging.ideogram_generator import IdeogramGenerator
-from app.config.settings import IMAGE_PROVIDER
+from app.imaging.image_generator import ImageGenerator
 from app.publisher.draft_creator import DraftCreator
 from app.storage.local_storage import LocalStorage
 from app.utils.logger import get_logger
@@ -28,13 +26,8 @@ class Pipeline:
         self.storage = LocalStorage()
         self.filter = HotFilter()
         self.writer = ArticleWriter()
-        # 根据配置选择图片生成器
-        if IMAGE_PROVIDER == "v3":
-            self.image_gen = IdeogramGenerator()
-            _log.info("使用 Ideogram V3 图片生成器")
-        else:
-            self.image_gen = FluxGenerator()
-            _log.info("使用 FLUX 图片生成器")
+        # 使用统一图片生成器（支持多提供商自动切换）
+        self.image_gen = ImageGenerator()
         self.draft_creator = DraftCreator()
 
         # 采集器列表

@@ -12,9 +12,7 @@ from collectors.huggingface_collector import HuggingFaceCollector
 from processors.filter import SelectedItem
 from processors.multi_stage_filter import create_multi_stage_filter
 from processors.writer import ArticleWriter, ArticleResult
-from imaging.flux_generator import FluxGenerator
-from imaging.ideogram_generator import IdeogramGenerator
-from app.config.settings import IMAGE_PROVIDER
+from imaging.image_generator import ImageGenerator
 from publisher.draft_creator import DraftCreator
 from storage.local_storage import LocalStorage
 from utils.logger import get_logger
@@ -33,13 +31,8 @@ class Pipeline:
             final_output_size=10,   # 最终输出素材数量
         )
         self.writer = ArticleWriter()
-        # 根据配置选择图片生成器
-        if IMAGE_PROVIDER == "v3":
-            self.image_gen = IdeogramGenerator()
-            _log.info("使用 Ideogram V3 图片生成器")
-        else:
-            self.image_gen = FluxGenerator()
-            _log.info("使用 FLUX 图片生成器")
+        # 使用统一图片生成器（支持多提供商自动切换）
+        self.image_gen = ImageGenerator()
         self.draft_creator = DraftCreator()
 
         # 采集器列表
