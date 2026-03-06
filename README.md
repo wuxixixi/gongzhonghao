@@ -7,7 +7,7 @@
 - **数据采集**：自动从 arXiv、GitHub、HuggingFace、新闻网站采集 AI 资讯
 - **智能筛选**：基于热度、相关性、质量多维度筛选优质内容
 - **文章生成**：自动撰写热点分析文章
-- **图片生成**：支持 FLUX 生成封面和配图
+- **图片生成**：支持 FLUX 和 Ideogram V3 生成封面和配图
 - **自动发布**：一键发布到微信公众号草稿箱
 - **定时任务**：支持 Windows 定时任务自动化运行
 
@@ -25,10 +25,12 @@
 │   │   ├── article_downloader.py  # 文章下载
 │   │   ├── article_selector.py    # 文章选择
 │   │   ├── filter.py              # 内容过滤
+│   │   ├── multi_stage_filter.py  # 多阶段智能筛选
 │   │   ├── quality_checker.py     # 质量检查
 │   │   └── writer.py               # 文章写作
 │   ├── imaging/            # 图片生成
-│   │   └── flux_generator.py      # FLUX 图片生成
+│   │   ├── flux_generator.py      # FLUX 图片生成
+│   │   └── ideogram_generator.py  # Ideogram V3 图片生成
 │   ├── publisher/          # 发布模块
 │   │   ├── draft_creator.py       # 草稿创建
 │   │   ├── media_uploader.py      # 媒体上传
@@ -39,6 +41,7 @@
 │   │   └── settings.py            # 配置管理
 │   └── utils/             # 工具模块
 │       ├── logger.py              # 日志
+│       ├── proxy.py               # 代理配置
 │       └── retry.py               # 重试机制
 ├── scripts/                # 脚本目录
 │   ├── pipeline.py         # 处理流水线
@@ -67,7 +70,8 @@ pip install -r requirements.txt
 
 2. 编辑 `.env` 文件，配置必要参数：
    - 微信公众号 AppID 和 AppSecret
-   - FLUX API Key
+   - DMXAPI API Key（用于 LLM 和图片生成）
+   - Tavily API Key（用于新闻搜索）
    - 其他可选配置
 
 ### 运行
@@ -98,7 +102,11 @@ schtasks /create /tn "WechatAI_Deep" /tr "python D:\公众号\auto_generator.py"
 - Python 3.10+
 - requests
 - openai
-- wechatpy
+- arxiv
+- beautifulsoup4
+- Pillow
+- tavily-python
+- python-dotenv
 
 ## License
 
