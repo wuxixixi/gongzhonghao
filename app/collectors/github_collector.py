@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 
 from app.collectors.base import BaseCollector, RawItem
 from app.utils.logger import get_logger
+from app.utils.proxy import requests_with_proxy
 
 _log = get_logger("github_collector")
 

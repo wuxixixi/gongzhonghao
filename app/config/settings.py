@@ -30,6 +30,10 @@ DMXAPI_API_KEY: str = _require("DMXAPI_API_KEY")
 LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
 IMAGE_MODEL: str = os.getenv("IMAGE_MODEL", "flux")
 
+# --- 图片生成器选择 ---
+# 可选: "flux" 或 "v3" (Ideogram V3)
+IMAGE_PROVIDER: str = os.getenv("IMAGE_PROVIDER", "v3").lower()
+
 # --- Ideogram V3 (Image Generation) ---
 IDEOGRAM_API_KEY: str = os.getenv("IDEOGRAM_API_KEY", "")
 IDEOGRAM_API_URL: str = os.getenv("IDEOGRAM_API_URL", "https://aihubmix.com/api/IdeogramAI/ideogram/generate")
