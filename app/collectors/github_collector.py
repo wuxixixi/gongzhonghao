@@ -37,7 +37,7 @@ class GithubCollector(BaseCollector):
         items: List[RawItem] = []
 
         try:
-            resp = requests.get(self.TRENDING_URL, headers=self.HEADERS, timeout=30)
+            resp = requests_with_proxy(self.TRENDING_URL, headers=self.HEADERS, timeout=30)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
 

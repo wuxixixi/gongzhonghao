@@ -300,3 +300,25 @@ def with_circuit_breaker(
 RETRY_FAST = RetryConfig(max_retries=3, base_delay=0.5, max_delay=5.0)
 RETRY_NORMAL = RetryConfig(max_retries=3, base_delay=1.0, max_delay=60.0)
 RETRY_SLOW = RetryConfig(max_retries=5, base_delay=2.0, max_delay=300.0)
+
+
+# 兼容旧接口：retry 装饰器
+def retry(
+    max_attempts: int = 3,
+    delay: float = 1.0,
+    exceptions: Tuple[type, ...] = (Exception,),
+):
+    """
+    兼容旧接口的 retry 装饰器
+
+    Args:
+        max_attempts: 最大重试次数
+        delay: 基础延迟（秒）
+        exceptions: 需要重试的异常类型
+    """
+    return with_retry(
+        max_retries=max_attempts - 1,
+        base_delay=delay,
+        max_delay=delay * 10,
+        retry_exceptions=exceptions,
+    )

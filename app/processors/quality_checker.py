@@ -9,6 +9,7 @@
 - 整体质量评估
 """
 
+import time
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -92,6 +93,31 @@ class ArticleQualityChecker:
             base_url=DMXAPI_BASE_URL,
             api_key=DMXAPI_API_KEY,
         )
+        self.model = LLM_MODEL
+        self.max_retries = 3
+
+    def _call_llm_with_retry(self, messages: list, temperature: float = 0.3, max_tokens: int = 3000) -> str:
+        """带重试的 LLM 调用"""
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return response.choices[0].message.content or ""
+            except Exception as e:
+                last_error = e
+                _log.warning("LLM 调用失败 (尝试 %d/%d): %s", attempt + 1, self.max_retries, e)
+                if attempt < self.max_retries - 1:
+                    wait_time = 2 ** (attempt + 1)
+                    _log.info("%.1f 秒后重试...", wait_time)
+                    time.sleep(wait_time)
+
+        _log.error("LLM 调用失败 %d 次后放弃", self.max_retries)
+        raise last_error
 
     def check(self, article_content: str, outline_info: str = "") -> QualityCheckResult:
         """对文章进行全面质量检查
@@ -116,17 +142,11 @@ class ArticleQualityChecker:
 请输出 JSON 格式的检查结果。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=LLM_MODEL,
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=0.3,
-                max_tokens=2000,
-            )
-
-            content = response.choices[0].message.content
+            messages = [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ]
+            content = self._call_llm_with_retry(messages, temperature=0.3, max_tokens=2000)
             return self._parse_result(content)
 
         except Exception as e:
@@ -220,6 +240,31 @@ class ArticleReviser:
             base_url=DMXAPI_BASE_URL,
             api_key=DMXAPI_API_KEY,
         )
+        self.model = LLM_MODEL
+        self.max_retries = 3
+
+    def _call_llm_with_retry(self, messages: list, temperature: float = 0.3, max_tokens: int = 3000) -> str:
+        """带重试的 LLM 调用"""
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return response.choices[0].message.content or ""
+            except Exception as e:
+                last_error = e
+                _log.warning("LLM 调用失败 (尝试 %d/%d): %s", attempt + 1, self.max_retries, e)
+                if attempt < self.max_retries - 1:
+                    wait_time = 2 ** (attempt + 1)
+                    _log.info("%.1f 秒后重试...", wait_time)
+                    time.sleep(wait_time)
+
+        _log.error("LLM 调用失败 %d 次后放弃", self.max_retries)
+        raise last_error
 
     def revise(
         self,
@@ -251,17 +296,11 @@ class ArticleReviser:
 请输出修订后的文章（Markdown 格式）。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=LLM_MODEL,
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=0.7,
-                max_tokens=4500,
-            )
-
-            revised = response.choices[0].message.content
+            messages = [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ]
+            revised = self._call_llm_with_retry(messages, temperature=0.7, max_tokens=4500)
             _log.info("文章修订完成")
             return revised
 

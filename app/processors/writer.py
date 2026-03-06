@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from typing import List
 
@@ -34,6 +35,35 @@ class ArticleWriter:
     # 质量检查相关配置
     MAX_REVISION_ATTEMPTS = 2  # 最多修订次数
     PASSING_SCORE = 7          # 通过质量检查的最低分数
+    MAX_RETRIES = 3            # LLM 调用最大重试次数
+
+    def _call_llm_with_retry(self, system_prompt: str, user_prompt: str, temperature: float = 0.7, max_tokens: int = 1500) -> str:
+        """带重试的 LLM 调用"""
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        last_error = None
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return response.choices[0].message.content or ""
+            except Exception as e:
+                last_error = e
+                _log.warning("LLM 调用失败 (尝试 %d/%d): %s", attempt + 1, self.MAX_RETRIES, e)
+                if attempt < self.MAX_RETRIES - 1:
+                    # 指数退避: 2, 4, 8 秒
+                    wait_time = 2 ** (attempt + 1)
+                    _log.info("%.1f 秒后重试...", wait_time)
+                    time.sleep(wait_time)
+
+        _log.error("LLM 调用失败 %d 次后放弃", self.MAX_RETRIES)
+        raise last_error
 
     OUTLINE_SYSTEM = """你是一位资深科技媒体主编，擅长策划爆款公众号文章。
 
@@ -273,17 +303,12 @@ class ArticleWriter:
 请输出大纲 JSON。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": self.DEEP_ANALYSIS_OUTLINE_SYSTEM},
-                    {"role": "user", "content": user_message},
-                ],
+            content = self._call_llm_with_retry(
+                system_prompt=self.DEEP_ANALYSIS_OUTLINE_SYSTEM,
+                user_prompt=user_message,
                 temperature=0.7,
                 max_tokens=1500,
             )
-
-            content = response.choices[0].message.content
             return self._parse_outline(content, fallback_title=selected_item.raw.title)
 
         except Exception as e:
@@ -321,17 +346,12 @@ class ArticleWriter:
 请撰写文章正文。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
+            return self._call_llm_with_retry(
+                system_prompt=system_prompt,
+                user_prompt=user_message,
                 temperature=0.8,
                 max_tokens=4500,
             )
-
-            return response.choices[0].message.content or ""
 
         except Exception as e:
             _log.error("深度分析正文生成异常: %s", e)
@@ -377,17 +397,12 @@ class ArticleWriter:
 请输出大纲 JSON。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": self.OUTLINE_SYSTEM},
-                    {"role": "user", "content": user_message},
-                ],
+            content = self._call_llm_with_retry(
+                system_prompt=self.OUTLINE_SYSTEM,
+                user_prompt=user_message,
                 temperature=0.7,
                 max_tokens=1500,
             )
-
-            content = response.choices[0].message.content
             # 获取第一个文章的标题作为 fallback
             fallback_title = items[0].raw.title if items else ""
             return self._parse_outline(content, fallback_title=fallback_title)
@@ -420,17 +435,12 @@ class ArticleWriter:
 请根据大纲撰写文章正文。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
+            return self._call_llm_with_retry(
+                system_prompt=system_prompt,
+                user_prompt=user_message,
                 temperature=0.8,
                 max_tokens=4000,
             )
-
-            return response.choices[0].message.content or ""
 
         except Exception as e:
             _log.error("正文生成异常: %s", e)

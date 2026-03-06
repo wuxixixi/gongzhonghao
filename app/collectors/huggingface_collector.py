@@ -5,6 +5,7 @@ import requests
 
 from app.collectors.base import BaseCollector, RawItem
 from app.config.settings import HF_MODELS_LIMIT
+from app.utils.proxy import requests_with_proxy
 from app.utils.logger import get_logger
 
 _log = get_logger("hf_collector")
@@ -38,7 +39,7 @@ class HuggingFaceCollector(BaseCollector):
         items: List[RawItem] = []
 
         try:
-            resp = requests.get(
+            resp = requests_with_proxy(
                 self.API_URL,
                 params={
                     "sort": "createdAt",

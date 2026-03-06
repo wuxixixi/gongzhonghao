@@ -60,3 +60,12 @@ def get_daily_dir() -> Path:
 
 # --- 项目根目录 ---
 PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent.parent
+
+# --- 代理配置 ---
+HTTP_PROXY: str = os.getenv("HTTP_PROXY", "")
+HTTPS_PROXY: str = os.getenv("HTTPS_PROXY", "")
+NO_PROXY: str = os.getenv("NO_PROXY", "localhost,127.0.0.1")
+
+# --- 网络请求配置 ---
+REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "30"))
+REQUEST_MAX_RETRIES: int = int(os.getenv("REQUEST_MAX_RETRIES", "3"))

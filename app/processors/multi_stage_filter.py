@@ -137,8 +137,10 @@ class MultiStageFilter:
     
     def _init_llm_client(self):
         """初始化 LLM 客户端"""
-        provider = LLM_PROVIDER
+        import time as time_module
         
+        provider = LLM_PROVIDER
+
         if provider == "ollama":
             _log.info("使用 Ollama 本地模型: %s", OLLAMA_MODEL)
             self.client = OpenAI(
@@ -153,6 +155,32 @@ class MultiStageFilter:
                 api_key=DMXAPI_API_KEY,
             )
             self.model = LLM_MODEL
+
+        self.max_retries = 3
+        self._time_module = time_module
+
+    def _call_llm_with_retry(self, messages: list, temperature: float = 0.3, max_tokens: int = 2500) -> str:
+        """带重试的 LLM 调用"""
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return response.choices[0].message.content or ""
+            except Exception as e:
+                last_error = e
+                _log.warning("LLM 调用失败 (尝试 %d/%d): %s", attempt + 1, self.max_retries, e)
+                if attempt < self.max_retries - 1:
+                    wait_time = 2 ** (attempt + 1)
+                    _log.info("%.1f 秒后重试...", wait_time)
+                    self._time_module.sleep(wait_time)
+
+        _log.error("LLM 调用失败 %d 次后放弃", self.max_retries)
+        raise last_error
     
     def filter(self, items: List[RawItem], top_k: int = 10) -> List[SelectedItem]:
         """
@@ -530,18 +558,12 @@ class MultiStageFilter:
         # 调用LLM进行评估
         try:
             _log.info("正在调用LLM进行深度评估，输入 %d 条素材...", len(items))
-            
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": materials},
-                ],
-                temperature=0.3,  # 低temperature确保一致性
-                max_tokens=2500,
-            )
-            
-            content = response.choices[0].message.content
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": materials},
+            ]
+            content = self._call_llm_with_retry(messages, temperature=0.3, max_tokens=2500)
             selected_items = self._parse_llm_response(content, items)
             
             if not selected_items:
