@@ -1,10 +1,12 @@
 """
 图片生成模块
 支持多个提供商：DMXAPI (Flux), AiHubMix (Ideogram), Pollinations.ai (免费备用)
+支持并发生成图片，显著提升生成速度。
 """
 
 from typing import List, Optional
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.config.settings import (
     DMXAPI_BASE_URL, DMXAPI_API_KEY, IMAGE_MODEL,
@@ -134,14 +136,45 @@ class ImageGenerator:
         self,
         cover_prompt: str,
         image_prompts: List[str],
-        output_dir: str
+        output_dir: str,
+        parallel: bool = True,
+        max_workers: int = 4,
     ) -> dict:
-        """生成所有图片（封面 + 配图）"""
+        """
+        生成所有图片（封面 + 配图）
+        
+        Args:
+            cover_prompt: 封面图提示词
+            image_prompts: 配图提示词列表
+            output_dir: 输出目录
+            parallel: 是否并发生成（默认 True）
+            max_workers: 并发工作线程数
+            
+        Returns:
+            {"cover": 封面路径或 None, "images": 配图路径列表}
+        """
         result = {
             "cover": None,
             "images": [],
         }
-
+        
+        if parallel:
+            return self._generate_all_parallel(cover_prompt, image_prompts, output_dir, max_workers)
+        else:
+            return self._generate_all_sequential(cover_prompt, image_prompts, output_dir)
+    
+    def _generate_all_sequential(
+        self,
+        cover_prompt: str,
+        image_prompts: List[str],
+        output_dir: str,
+    ) -> dict:
+        """串行生成所有图片（原逻辑）"""
+        result = {
+            "cover": None,
+            "images": [],
+        }
+        
         # 生成封面
         cover_path = f"{output_dir}/cover.png"
         if self.generate_cover(cover_prompt, cover_path):
@@ -152,12 +185,113 @@ class ImageGenerator:
         result["images"] = images
 
         _log.info(
-            "图片生成完成: 封面 %s, 配图 %d 张",
+            "图片生成完成(串行): 封面 %s, 配图 %d 张",
             "成功" if result["cover"] else "失败",
             len(result["images"])
         )
 
         return result
+    
+    def _generate_all_parallel(
+        self,
+        cover_prompt: str,
+        image_prompts: List[str],
+        output_dir: str,
+        max_workers: int,
+    ) -> dict:
+        """
+        并发生成所有图片
+        
+        将封面和配图一起并发提交，显著缩短总耗时。
+        预期效果：耗时从 40秒 降至 10-15秒。
+        """
+        result = {
+            "cover": None,
+            "images": [None] * min(3, len(image_prompts)),
+        }
+        
+        _log.info("开始并发生成图片: 封面 1 张 + 配图 %d 张", len(image_prompts[:3]))
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {}
+            
+            # 提交封面生成任务
+            cover_path = f"{output_dir}/cover.png"
+            futures[executor.submit(
+                self._generate_single_with_fallback,
+                cover_prompt,
+                cover_path,
+                "封面"
+            )] = ("cover", 0)
+            
+            # 提交配图生成任务
+            for i, prompt in enumerate(image_prompts[:3], start=1):
+                save_path = f"{output_dir}/image_{i}.png"
+                futures[executor.submit(
+                    self._generate_single_with_fallback,
+                    prompt,
+                    save_path,
+                    f"配图{i}"
+                )] = ("image", i - 1)
+            
+            # 收集结果
+            for future in as_completed(futures):
+                task_type, index = futures[future]
+                try:
+                    success, path = future.result()
+                    if task_type == "cover" and success:
+                        result["cover"] = path
+                        _log.info("封面图生成成功: %s", path)
+                    elif task_type == "image" and success:
+                        result["images"][index] = path
+                        _log.info("配图 %d 生成成功: %s", index + 1, path)
+                except Exception as e:
+                    _log.error("%s生成异常: %s", 
+                              "封面" if task_type == "cover" else f"配图{index+1}", e)
+        
+        # 过滤掉失败的配图
+        result["images"] = [img for img in result["images"] if img is not None]
+        
+        _log.info(
+            "图片生成完成(并发): 封面 %s, 配图 %d 张",
+            "成功" if result["cover"] else "失败",
+            len(result["images"])
+        )
+        
+        return result
+    
+    def _generate_single_with_fallback(
+        self,
+        prompt: str,
+        save_path: str,
+        task_name: str,
+    ) -> tuple[bool, Optional[str]]:
+        """
+        使用备用提供商生成单张图片
+        
+        Args:
+            prompt: 提示词
+            save_path: 保存路径
+            task_name: 任务名称（用于日志）
+            
+        Returns:
+            (是否成功, 图片路径)
+        """
+        for name, generator in self.generators:
+            try:
+                if generator.generate_cover(prompt, save_path):
+                    if self._validate_image(save_path):
+                        return True, save_path
+                    else:
+                        _log.warning("%s: %s 生成的图片验证失败", task_name, name)
+                        if os.path.exists(save_path):
+                            os.remove(save_path)
+            except Exception as e:
+                _log.warning("%s: %s 生成失败: %s", task_name, name, e)
+                continue
+        
+        _log.error("%s: 所有生成器均失败", task_name)
+        return False, None
 
 
 # 创建默认实例

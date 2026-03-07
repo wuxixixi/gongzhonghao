@@ -11,6 +11,7 @@ from app.utils.proxy import requests_with_proxy
 
 _log = get_logger("github_collector")
 
+
 # NLP 相关关键词，用于过滤仓库 - 聚焦自然语言处理方向
 NLP_KEYWORDS = re.compile(
     r"\b(nlp|natural.?language|llm|large.?language|transformer|bert|gpt|"
@@ -26,6 +27,10 @@ NLP_KEYWORDS = re.compile(
 class GithubCollector(BaseCollector):
 
     name = "github"
+    
+    # 覆盖基类配置
+    rate_limit_delay = 1.0  # GitHub 限制更严格
+    timeout = 30
 
     TRENDING_URL = "https://github.com/trending?since=daily&spoken_language_code="
     HEADERS = {
@@ -33,31 +38,29 @@ class GithubCollector(BaseCollector):
         "Accept-Language": "en-US,en;q=0.9",
     }
 
-    def collect(self) -> List[RawItem]:
-        _log.info("开始采集 GitHub Trending")
+    def _do_collect(self) -> List[RawItem]:
+        """执行 GitHub Trending 采集"""
         items: List[RawItem] = []
 
-        try:
-            resp = requests_with_proxy(self.TRENDING_URL, headers=self.HEADERS, timeout=30)
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
+        resp = requests_with_proxy(self.TRENDING_URL, headers=self.HEADERS, timeout=self.timeout)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-            rows = soup.select("article.Box-row")
-            _log.info("GitHub Trending 解析到 %d 个仓库", len(rows))
+        rows = soup.select("article.Box-row")
+        _log.debug("GitHub Trending 解析到 %d 个仓库", len(rows))
 
-            for row in rows:
-                try:
-                    item = self._parse_row(row)
-                    if item:
-                        items.append(item)
-                except Exception as e:
-                    _log.debug("解析仓库行失败: %s", e)
-                    continue
+        for row in rows:
+            # 限流
+            self._rate_limit()
+            
+            try:
+                item = self._parse_row(row)
+                if item:
+                    items.append(item)
+            except Exception as e:
+                _log.debug("解析仓库行失败: %s", e)
+                continue
 
-        except Exception as e:
-            _log.error("GitHub Trending 采集失败: %s", e)
-
-        _log.info("GitHub Trending 采集完成 (AI 相关)，共 %d 条", len(items))
         return items
 
     def _parse_row(self, row) -> RawItem | None:
@@ -95,4 +98,8 @@ class GithubCollector(BaseCollector):
             url=url,
             published_at=datetime.now(),
             tags=["github", language.lower()] if language else ["github"],
+            extra={
+                "stars": int(stars) if stars.isdigit() else 0,
+                "language": language,
+            }
         )

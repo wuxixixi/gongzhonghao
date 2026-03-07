@@ -26,6 +26,8 @@ from app.config.settings import (
     LLM_PROVIDER, OLLAMA_BASE_URL, OLLAMA_MODEL,
 )
 from app.utils.logger import get_logger
+from app.utils.llm_client import get_llm_client
+from app.utils.llm_parser import LLMResponseParser, FilterSelectionResult
 
 _log = get_logger("multi_stage_filter")
 
@@ -127,60 +129,23 @@ class MultiStageFilter:
         self.final_output_size = final_output_size
         self.diversity_groups = diversity_groups
         
-        # 初始化 LLM 客户端
-        self._init_llm_client()
+        # 使用统一 LLM 客户端
+        self._llm_client = get_llm_client()
         
         _log.info(
             "MultiStageFilter 初始化完成: stage4=%d, final=%d, diversity=%d",
             stage4_sample_size, final_output_size, diversity_groups
         )
     
-    def _init_llm_client(self):
-        """初始化 LLM 客户端"""
-        import time as time_module
-        
-        provider = LLM_PROVIDER
-
-        if provider == "ollama":
-            _log.info("使用 Ollama 本地模型: %s", OLLAMA_MODEL)
-            self.client = OpenAI(
-                base_url=f"{OLLAMA_BASE_URL}/v1",
-                api_key="ollama",
-            )
-            self.model = OLLAMA_MODEL
-        else:
-            _log.info("使用 DMXAPI 云端模型: %s", LLM_MODEL)
-            self.client = OpenAI(
-                base_url=DMXAPI_BASE_URL,
-                api_key=DMXAPI_API_KEY,
-            )
-            self.model = LLM_MODEL
-
-        self.max_retries = 3
-        self._time_module = time_module
-
     def _call_llm_with_retry(self, messages: list, temperature: float = 0.3, max_tokens: int = 2500) -> str:
-        """带重试的 LLM 调用"""
-        last_error = None
-        for attempt in range(self.max_retries):
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                return response.choices[0].message.content or ""
-            except Exception as e:
-                last_error = e
-                _log.warning("LLM 调用失败 (尝试 %d/%d): %s", attempt + 1, self.max_retries, e)
-                if attempt < self.max_retries - 1:
-                    wait_time = 2 ** (attempt + 1)
-                    _log.info("%.1f 秒后重试...", wait_time)
-                    self._time_module.sleep(wait_time)
-
-        _log.error("LLM 调用失败 %d 次后放弃", self.max_retries)
-        raise last_error
+        """带重试的 LLM 调用（使用统一客户端）"""
+        return self._llm_client.chat_full(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            max_retries=3,
+            base_delay=2.0,
+        )
     
     def filter(self, items: List[RawItem], top_k: int = 10) -> List[SelectedItem]:
         """
@@ -601,39 +566,34 @@ class MultiStageFilter:
         return "\n".join(lines)
     
     def _parse_llm_response(self, content: str, items: List[ScoredItem]) -> List[ScoredItem]:
-        """解析LLM评估响应"""
+        """解析LLM评估响应（使用统一解析器）"""
         try:
-            # 提取JSON
-            json_str = content
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0]
+            # 使用统一解析器
+            result = LLMResponseParser.safe_parse_as_model(
+                content,
+                FilterSelectionResult,
+                FilterSelectionResult()
+            )
             
-            # 清理
-            json_str = json_str.strip()
-            json_str = json_str.replace("'", '"').replace("'", '"')
-            
-            data = json.loads(json_str)
-            selected = data.get("selected", [])
+            selected = result.selected
             
             # 构建结果
-            result = []
+            parsed_items = []
             for sel in selected:
-                idx = sel.get("index", -1)
+                idx = sel.index
                 if 0 <= idx < len(items):
                     item = items[idx]
                     # 更新分数
-                    item.stage4_score = sel.get("overall_score", 5.0)
+                    item.stage4_score = sel.overall_score
                     item.final_score = item.stage4_score
                     # 设置其他信息
-                    item.category = sel.get("category", item.diversity_group)
-                    item.reason = sel.get("reason", "")
-                    result.append(item)
+                    item.category = sel.category or item.diversity_group
+                    item.reason = sel.reason or ""
+                    parsed_items.append(item)
             
             # 按最终分数排序
-            result.sort(key=lambda x: x.final_score, reverse=True)
-            return result
+            parsed_items.sort(key=lambda x: x.final_score, reverse=True)
+            return parsed_items
             
         except Exception as e:
             _log.error("LLM响应解析失败: %s", e)

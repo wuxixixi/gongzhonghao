@@ -14,6 +14,10 @@ class NewsCollector(BaseCollector):
     """使用 Tavily 搜索引擎采集 NLP 新闻"""
 
     name = "news"
+    
+    # 覆盖基类配置
+    rate_limit_delay = 0.5
+    timeout = 30
 
     # NLP 相关搜索关键词
     SEARCH_QUERIES = [
@@ -25,49 +29,49 @@ class NewsCollector(BaseCollector):
     ]
 
     def __init__(self):
-        self.client = TavilyClient(api_key=TAVILY_API_KEY)
+        super().__init__()
+        self._client = TavilyClient(api_key=TAVILY_API_KEY)
 
-    def collect(self) -> List[RawItem]:
-        """执行采集"""
-        _log.info("开始采集 AI 新闻 (Tavily)")
+    def _do_collect(self) -> List[RawItem]:
+        """执行新闻采集"""
         seen_urls: set = set()
         items: List[RawItem] = []
 
         for query in self.SEARCH_QUERIES:
-            try:
-                _log.debug("搜索: %s", query)
+            # 限流
+            self._rate_limit()
+            
+            _log.debug("搜索: %s", query)
 
-                response = self.client.search(
-                    query=query,
-                    search_depth="basic",
-                    max_results=10,
-                    include_raw_content=False,
-                    topic="news",
-                )
+            response = self._client.search(
+                query=query,
+                search_depth="basic",
+                max_results=10,
+                include_raw_content=False,
+                topic="news",
+            )
 
-                for result in response.get("results", []):
-                    url = result.get("url", "")
-                    if url in seen_urls:
-                        continue
-                    seen_urls.add(url)
+            for result in response.get("results", []):
+                url = result.get("url", "")
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
 
-                    title = result.get("title", "")
-                    content = result.get("content", "")[:300]
+                title = result.get("title", "")
+                content = result.get("content", "")[:300]
 
-                    items.append(RawItem(
-                        source="news",
-                        title=title,
-                        summary=content,
-                        url=url,
-                        published_at=datetime.now(),
-                        tags=["news", "tavily"],
-                    ))
+                items.append(RawItem(
+                    source="news",
+                    title=title,
+                    summary=content,
+                    url=url,
+                    published_at=datetime.now(),
+                    tags=["news", "tavily"],
+                    extra={
+                        "query": query,
+                    }
+                ))
 
-                _log.debug("查询 '%s' 返回 %d 条", query, len(response.get("results", [])))
+            _log.debug("查询 '%s' 返回 %d 条", query, len(response.get("results", [])))
 
-            except Exception as e:
-                _log.warning("搜索 '%s' 失败: %s", query, e)
-                continue
-
-        _log.info("AI 新闻采集完成，共 %d 条 (去重后)", len(items))
         return items

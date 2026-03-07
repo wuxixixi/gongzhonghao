@@ -10,6 +10,7 @@ from app.collectors.news_collector import NewsCollector
 from app.collectors.github_collector import GithubCollector
 from app.collectors.huggingface_collector import HuggingFaceCollector
 from app.processors.filter import HotFilter, SelectedItem
+from app.processors.multi_stage_filter import create_multi_stage_filter, MultiStageFilterAdapter
 from app.processors.writer import ArticleWriter, ArticleResult
 from app.imaging.image_generator import ImageGenerator
 from app.publisher.draft_creator import DraftCreator
@@ -22,9 +23,20 @@ _log = get_logger("pipeline")
 class Pipeline:
     """流水线编排器"""
 
-    def __init__(self):
+    def __init__(self, use_multi_stage_filter: bool = True):
         self.storage = LocalStorage()
-        self.filter = HotFilter()
+        
+        # 使用多级筛选器（推荐）
+        if use_multi_stage_filter:
+            self.filter = create_multi_stage_filter(
+                stage4_sample_size=15,
+                final_output_size=10,
+            )
+            _log.info("使用 MultiStageFilter 多级筛选器")
+        else:
+            self.filter = HotFilter()
+            _log.info("使用 HotFilter 传统筛选器")
+        
         self.writer = ArticleWriter()
         # 使用统一图片生成器（支持多提供商自动切换）
         self.image_gen = ImageGenerator()

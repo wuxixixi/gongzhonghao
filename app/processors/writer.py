@@ -1,10 +1,7 @@
 import json
 import re
-import time
 from dataclasses import dataclass, field
 from typing import List
-
-from openai import OpenAI
 
 from app.processors.filter import SelectedItem
 from app.processors.quality_checker import ArticleQualityChecker, ArticleReviser, QualityCheckResult
@@ -14,6 +11,8 @@ from app.config.settings import (
     LLM_PROVIDER, OLLAMA_BASE_URL, OLLAMA_MODEL,
 )
 from app.utils.logger import get_logger
+from app.utils.llm_client import get_llm_client
+from app.utils.llm_parser import LLMResponseParser, ArticleOutline
 
 _log = get_logger("writer")
 
@@ -37,33 +36,30 @@ class ArticleWriter:
     PASSING_SCORE = 7          # 通过质量检查的最低分数
     MAX_RETRIES = 3            # LLM 调用最大重试次数
 
+    def __init__(self):
+        # 使用统一 LLM 客户端
+        self._llm_client = get_llm_client()
+        self.provider = LLM_PROVIDER
+
+        _log.info("ArticleWriter 初始化完成，使用 LLM 提供商: %s", self.provider)
+
+        # 初始化质量检查器和修订器
+        self.quality_checker = ArticleQualityChecker()
+        self.reviser = ArticleReviser()
+
     def _call_llm_with_retry(self, system_prompt: str, user_prompt: str, temperature: float = 0.7, max_tokens: int = 1500) -> str:
-        """带重试的 LLM 调用"""
+        """带重试的 LLM 调用（使用统一客户端）"""
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        last_error = None
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                return response.choices[0].message.content or ""
-            except Exception as e:
-                last_error = e
-                _log.warning("LLM 调用失败 (尝试 %d/%d): %s", attempt + 1, self.MAX_RETRIES, e)
-                if attempt < self.MAX_RETRIES - 1:
-                    # 指数退避: 2, 4, 8 秒
-                    wait_time = 2 ** (attempt + 1)
-                    _log.info("%.1f 秒后重试...", wait_time)
-                    time.sleep(wait_time)
-
-        _log.error("LLM 调用失败 %d 次后放弃", self.MAX_RETRIES)
-        raise last_error
+        return self._llm_client.chat_full(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            max_retries=self.MAX_RETRIES,
+            base_delay=2.0,
+        )
 
     OUTLINE_SYSTEM = """你是一位资深科技媒体主编，擅长策划爆款公众号文章。
 
@@ -113,32 +109,6 @@ class ArticleWriter:
 - 直接输出 Markdown 格式正文
 - 用 ## 表示小节标题
 - 用 ![图片描述](image_n.png) 标记配图位置（n 为 1,2,3）"""
-
-    def __init__(self):
-        self.provider = LLM_PROVIDER
-        self.ollama_base_url = OLLAMA_BASE_URL
-        self.ollama_model = OLLAMA_MODEL
-
-        if self.provider == "ollama":
-            # 使用 Ollama 本地模型
-            _log.info("使用 Ollama 本地模型: %s @ %s", self.ollama_model, self.ollama_base_url)
-            self.client = OpenAI(
-                base_url=f"{self.ollama_base_url}/v1",
-                api_key="ollama",  # Ollama 不需要 API key
-            )
-            self.model = self.ollama_model
-        else:
-            # 使用 DMXAPI
-            _log.info("使用 DMXAPI 云端模型: %s", LLM_MODEL)
-            self.client = OpenAI(
-                base_url=DMXAPI_BASE_URL,
-                api_key=DMXAPI_API_KEY,
-            )
-            self.model = LLM_MODEL
-
-        # 初始化质量检查器和修订器
-        self.quality_checker = ArticleQualityChecker()
-        self.reviser = ArticleReviser()
 
     def write(self, items: List[SelectedItem]) -> ArticleResult:
         """两阶段生成文章（含质量检查）"""
@@ -822,8 +792,7 @@ class DeepAnalysisWriter(ArticleWriter):
 请输出大纲 JSON。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
+            content = self._llm_client.chat_full(
                 messages=[
                     {"role": "system", "content": DEEP_ANALYSIS_OUTLINE_SYSTEM},
                     {"role": "user", "content": user_message},
@@ -832,7 +801,6 @@ class DeepAnalysisWriter(ArticleWriter):
                 max_tokens=1500,
             )
 
-            content = response.choices[0].message.content
             return self._parse_outline(content, fallback_title=item.raw.title)
 
         except Exception as e:
@@ -870,8 +838,7 @@ class DeepAnalysisWriter(ArticleWriter):
 请根据大纲撰写文章正文。"""
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
+            return self._llm_client.chat_full(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
@@ -879,8 +846,6 @@ class DeepAnalysisWriter(ArticleWriter):
                 temperature=0.8,
                 max_tokens=4500,
             )
-
-            return response.choices[0].message.content or ""
 
         except Exception as e:
             _log.error("深度分析正文生成异常: %s", e)
