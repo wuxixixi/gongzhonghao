@@ -151,7 +151,16 @@ class LLMClientManager:
                 max_tokens=max_tokens,
                 **kwargs
             )
-            return response.choices[0].message.content or ""
+            
+            # 获取响应内容
+            message = response.choices[0].message
+            content = message.content or ""
+            
+            # GLM-5 等思维链模型：如果 content 为空，使用 reasoning_content
+            if not content and hasattr(message, 'reasoning_content') and message.reasoning_content:
+                content = message.reasoning_content
+            
+            return content
         except Exception as e:
             self._error_count += 1
             _log.error("LLM 调用失败: %s", e)
@@ -270,6 +279,41 @@ class LLMClientManager:
         """重置统计"""
         self._call_count = 0
         self._error_count = 0
+    
+    def get_circuit_breaker_status(self) -> str:
+        """
+        获取断路器状态
+        
+        Returns:
+            断路器状态: "closed" (正常), "open" (打开), "half_open" (半开)
+        """
+        from app.utils.retry import get_circuit_breaker
+        cb = get_circuit_breaker("llm_chat")
+        if cb:
+            return cb.state.value
+        return "unknown"
+    
+    def is_circuit_breaker_open(self) -> bool:
+        """
+        检查断路器是否打开
+        
+        Returns:
+            True 如果断路器打开（服务不可用）
+        """
+        return self.get_circuit_breaker_status() == "open"
+    
+    def reset_circuit_breaker(self) -> bool:
+        """
+        重置断路器
+        
+        将断路器状态重置为关闭，允许后续请求通过。
+        通常在确认服务已恢复后调用。
+        
+        Returns:
+            True 如果重置成功
+        """
+        from app.utils.retry import reset_circuit_breaker
+        return reset_circuit_breaker("llm_chat")
 
 
 # 全局单例实例

@@ -28,7 +28,12 @@ OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "glm-5:cloud")
 DMXAPI_BASE_URL: str = _require("DMXAPI_BASE_URL")
 DMXAPI_API_KEY: str = _require("DMXAPI_API_KEY")
 LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
-IMAGE_MODEL: str = os.getenv("IMAGE_MODEL", "flux")
+
+# --- 图片生成 API 配置（独立于 LLM）---
+# 用于 Flux/Ideogram 等图片生成服务
+IMAGE_API_BASE_URL: str = os.getenv("IMAGE_API_BASE_URL", "https://www.dmxapi.cn/v1")
+IMAGE_API_KEY: str = os.getenv("IMAGE_API_KEY", "")
+IMAGE_MODEL: str = os.getenv("IMAGE_MODEL", "flux-2-pro")
 
 # --- 图片生成器选择 ---
 # 可选: "flux" 或 "v3" (Ideogram V3)

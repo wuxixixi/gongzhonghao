@@ -9,7 +9,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.config.settings import (
-    DMXAPI_BASE_URL, DMXAPI_API_KEY, IMAGE_MODEL,
+    IMAGE_API_BASE_URL, IMAGE_API_KEY, IMAGE_MODEL,
     IMAGE_PROVIDER, IDEOGRAM_API_KEY
 )
 from app.utils.logger import get_logger

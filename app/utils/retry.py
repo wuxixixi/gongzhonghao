@@ -191,6 +191,45 @@ class CircuitBreakerOpen(Exception):
     pass
 
 
+# 全局断路器注册表
+_circuit_breakers: dict[str, CircuitBreaker] = {}
+
+
+def get_circuit_breaker(name: str) -> Optional[CircuitBreaker]:
+    """获取指定名称的断路器"""
+    return _circuit_breakers.get(name)
+
+
+def reset_circuit_breaker(name: str) -> bool:
+    """
+    重置指定断路器
+    
+    Args:
+        name: 断路器名称
+        
+    Returns:
+        True 如果重置成功
+    """
+    cb = _circuit_breakers.get(name)
+    if cb:
+        with cb._lock:
+            cb._state = CircuitState.CLOSED
+            cb._failure_count = 0
+            cb._success_count = 0
+            cb._half_open_calls = 0
+            cb._last_failure_time = None
+        _log.info("断路器 %s 已重置", name)
+        return True
+    return False
+
+
+def reset_all_circuit_breakers():
+    """重置所有断路器"""
+    for name in _circuit_breakers:
+        reset_circuit_breaker(name)
+    _log.info("所有断路器已重置")
+
+
 def with_retry(
     max_retries: int = 3,
     base_delay: float = 1.0,
@@ -280,12 +319,17 @@ def with_circuit_breaker(
             # 调用微信API
             pass
     """
-    breaker = CircuitBreaker(
-        name=name,
-        failure_threshold=failure_threshold,
-        recovery_timeout=recovery_timeout,
-        expected_exception=expected_exception,
-    )
+    # 使用全局注册表，确保同名断路器为同一实例
+    if name in _circuit_breakers:
+        breaker = _circuit_breakers[name]
+    else:
+        breaker = CircuitBreaker(
+            name=name,
+            failure_threshold=failure_threshold,
+            recovery_timeout=recovery_timeout,
+            expected_exception=expected_exception,
+        )
+        _circuit_breakers[name] = breaker
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)

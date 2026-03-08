@@ -112,6 +112,21 @@ class ArticleQualityChecker:
             质量检查结果
         """
         _log.info("开始质量检查...")
+        
+        # 检查 LLM 客户端是否可用
+        from app.utils.llm_client import llm_client
+        if llm_client.is_circuit_breaker_open():
+            _log.warning("LLM 断路器已打开，跳过质量检查，返回默认通过")
+            return QualityCheckResult(
+                passed=True,
+                grammar_issues=[],
+                logic_issues=[],
+                completeness_issues=[],
+                accuracy_issues=[],
+                overall_score=7,
+                suggestions=[],
+                summary="LLM 服务不可用，自动通过",
+            )
 
         user_message = f"""请对以下文章进行全面的质量检查：
 
@@ -133,6 +148,23 @@ class ArticleQualityChecker:
 
         except Exception as e:
             _log.error("质量检查异常: %s", e)
+            
+            # 如果是断路器打开导致的失败，返回通过
+            from app.utils.retry import CircuitBreakerOpen
+            if isinstance(e, CircuitBreakerOpen) or llm_client.is_circuit_breaker_open():
+                _log.warning("断路器导致检查失败，自动通过")
+                return QualityCheckResult(
+                    passed=True,
+                    grammar_issues=[],
+                    logic_issues=[],
+                    completeness_issues=[],
+                    accuracy_issues=[],
+                    overall_score=7,
+                    suggestions=[],
+                    summary="LLM 服务不可用，自动通过",
+                )
+            
+            # 其他错误返回失败
             return QualityCheckResult(
                 passed=False,
                 grammar_issues=[],

@@ -111,7 +111,7 @@ class ArticleWriter:
 - 用 ![图片描述](image_n.png) 标记配图位置（n 为 1,2,3）"""
 
     def write(self, items: List[SelectedItem]) -> ArticleResult:
-        """两阶段生成文章（含质量检查）"""
+        """两阶段生成文章（含质量检查和降级策略）"""
         _log.info("开始生成文章，素材 %d 条", len(items))
 
         # 阶段1: 生成大纲
@@ -126,8 +126,14 @@ class ArticleWriter:
 
         # 阶段2: 撰写全文
         content_md = self._write_content(items, outline)
+        
+        # 如果正文生成失败，使用降级策略
         if not content_md:
-            _log.error("正文生成失败")
+            _log.warning("正文生成失败，使用降级策略生成文章")
+            content_md = self._generate_fallback_content(items, outline)
+
+        if not content_md:
+            _log.error("降级策略也失败")
             raise RuntimeError("正文生成失败")
 
         _log.info("正文生成完成，字数: %d", len(content_md))
@@ -149,6 +155,52 @@ class ArticleWriter:
             cover_prompt=outline.get("cover_prompt", "AI technology, digital art, futuristic"),
             image_prompts=image_prompts,
         )
+    
+    def _generate_fallback_content(self, items: List[SelectedItem], outline: dict) -> str:
+        """
+        降级策略：基于素材生成简单文章
+        
+        当 LLM 调用失败时，使用模板生成基本可读的文章。
+        注意：不生成标题，标题由 ArticleResult.title 提供，保存时统一添加。
+        """
+        _log.info("使用降级策略生成文章")
+        
+        lines = []
+        
+        # 摘要
+        lines.append("> 本文由AI自动生成，汇总今日AI领域热点资讯。")
+        lines.append("")
+        
+        # 按分类分组
+        categories: dict = {}
+        for item in items:
+            cat = item.category or "其他"
+            if cat not in categories:
+                categories[cat] = []
+            categories[cat].append(item)
+        
+        # 生成各分类内容
+        for category, cat_items in categories.items():
+            lines.append(f"## {category}")
+            lines.append("")
+            
+            for item in cat_items[:5]:  # 每类最多5条
+                lines.append(f"### {item.raw.title}")
+                lines.append("")
+                lines.append(item.raw.summary)
+                lines.append("")
+                lines.append(f"来源: {item.raw.source} | [查看原文]({item.raw.url})")
+                lines.append("")
+        
+        # 结尾
+        lines.append("---")
+        lines.append("")
+        lines.append("*本文由AI日报系统自动生成*")
+        
+        content = "\n".join(lines)
+        _log.info("降级文章生成完成，字数: %d", len(content))
+        
+        return content
 
     def write_for_deep_analysis(
         self,
@@ -420,6 +472,7 @@ class ArticleWriter:
         """质量检查与修订
 
         如果质量检查不通过，自动进行修订，最多尝试 MAX_REVISION_ATTEMPTS 次。
+        如果 LLM 服务不可用（断路器打开），则跳过质量检查。
 
         Args:
             content_md: 文章内容
@@ -429,6 +482,12 @@ class ArticleWriter:
             修订后的文章内容
         """
         _log.info("开始质量检查...")
+
+        # 检查 LLM 客户端是否可用（断路器状态）
+        from app.utils.llm_client import llm_client
+        if hasattr(llm_client, '_circuit_breaker') and llm_client._circuit_breaker.state.value == "open":
+            _log.warning("LLM 断路器已打开，跳过质量检查")
+            return content_md
 
         # 格式化大纲信息
         outline_info = json.dumps(outline, ensure_ascii=False, indent=2)
@@ -460,6 +519,11 @@ class ArticleWriter:
 
                 # 修订文章
                 content_md = self.reviser.revise(content_md, check_result)
+                
+                # 检查修订后断路器是否打开
+                if hasattr(llm_client, '_circuit_breaker') and llm_client._circuit_breaker.state.value == "open":
+                    _log.warning("LLM 断路器在修订过程中打开，终止质量检查循环")
+                    return content_md
             else:
                 _log.error(
                     "质量检查仍未通过 (评分: %d/10)，达到最大修订次数",

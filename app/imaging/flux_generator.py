@@ -6,7 +6,7 @@ from PIL import Image
 import requests
 from io import BytesIO
 
-from app.config.settings import DMXAPI_BASE_URL, DMXAPI_API_KEY, IMAGE_MODEL
+from app.config.settings import IMAGE_API_BASE_URL, IMAGE_API_KEY, IMAGE_MODEL
 from app.utils.logger import get_logger
 from app.utils.retry import with_retry, with_circuit_breaker
 
@@ -20,7 +20,7 @@ MIN_IMAGE_SIZE = 1000
 
 
 class FluxGenerator:
-    """Flux 图片生成器 - 通过 dmxapi 调用"""
+    """Flux 图片生成器 - 使用独立的图片 API 配置"""
 
     # 图片尺寸
     COVER_SIZE = "1792x1024"      # 封面图 (16:9)
@@ -30,10 +30,15 @@ class FluxGenerator:
     MAX_SINGLE_IMAGE_RETRIES = 2
 
     def __init__(self):
+        # 使用独立的图片 API 配置
+        if not IMAGE_API_KEY:
+            _log.warning("IMAGE_API_KEY 未配置，Flux 生成器可能无法工作")
+        
         self.client = OpenAI(
-            base_url=DMXAPI_BASE_URL,
-            api_key=DMXAPI_API_KEY,
+            base_url=IMAGE_API_BASE_URL,
+            api_key=IMAGE_API_KEY,
         )
+        _log.info("FluxGenerator 初始化: base_url=%s, model=%s", IMAGE_API_BASE_URL, IMAGE_MODEL)
 
     def generate_cover(self, prompt: str, save_path: str) -> bool:
         """生成封面图（带重试）"""
