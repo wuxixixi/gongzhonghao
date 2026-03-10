@@ -32,12 +32,10 @@ def create_draft(date_str: str, article_type: str, user_id: int) -> dict:
 
     try:
         from app.publisher.wechat_client import WeChatClient
-        from app.publisher.draft_creator import DraftCreator
         from app.publisher.media_uploader import MediaUploader
 
         client = WeChatClient()
         uploader = MediaUploader(client)
-        creator = DraftCreator(client, uploader)
 
         # 读取 HTML 内容
         content_html = ""

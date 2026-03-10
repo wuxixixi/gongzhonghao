@@ -10,6 +10,7 @@
 - **图片生成**：支持 FLUX 和 Ideogram V3 生成封面和配图
 - **自动发布**：一键发布到微信公众号草稿箱
 - **定时任务**：支持 Windows 定时任务自动化运行
+- **Web 管理界面**：可视化配置管理、文章编辑、实时监控、发布管理
 
 ## 目录结构
 
@@ -49,7 +50,15 @@
 ├── main.py                 # 主程序入口
 ├── auto_generator.py       # 自动生成器
 ├── test_wechat.py          # 微信测试
+├── run_web.py              # Web 服务启动入口
 ├── requirements.txt       # 依赖
+├── web/                    # Web 管理界面
+│   ├── __init__.py        # Flask 应用工厂
+│   ├── api/               # API 蓝图
+│   ├── models/            # 数据库模型
+│   ├── services/           # 业务服务
+│   ├── tasks/             # 异步任务
+│   └── frontend/           # React 前端
 └── README.md              # 说明文档
 ```
 
@@ -97,7 +106,61 @@ schtasks /create /tn "WechatAI_Hot" /tr "python D:\公众号\main.py" /sc daily 
 schtasks /create /tn "WechatAI_Deep" /tr "python D:\公众号\auto_generator.py" /sc daily /st 10:00
 ```
 
+## Web 管理界面
+
+提供可视化 Web 管理界面，支持配置管理、内容编辑、系统监控、发布管理等功能。
+
+### 功能模块
+
+- **用户认证**：JWT Token 认证，支持管理员/编辑角色
+- **工作台**：系统概览、快捷操作、运行状态
+- **内容管理**：文章列表、详情预览、Markdown 编辑器、深度分析
+- **系统配置**：LLM/图片/微信/采集/代理等配置项管理
+- **系统监控**：运行状态、日志查看（支持实时流）、任务历史
+- **发布管理**：微信草稿创建、发布记录追踪
+
+### 启动方式
+
+```bash
+# 安装前端依赖
+cd web/frontend && npm install
+
+# 开发模式（前端）
+cd web/frontend && npm run dev
+
+# 开发模式（后端）
+python run_web.py
+
+# 生产模式（前端构建 + Flask 托管）
+cd web/frontend && npm run build
+python run_web.py --production
+```
+
+### 访问地址
+
+- 开发环境：http://localhost:3000
+- 生产环境：http://localhost:5000
+
+### 默认账号
+
+- 用户名：`admin`
+- 密码：`admin123456`（首次登录后请及时修改）
+
+### API 接口
+
+Web 后端提供 REST API：
+
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| 认证 | `/api/auth/*` | 登录、登出、用户管理 |
+| 配置 | `/api/config/*` | 系统配置 CRUD |
+| 内容 | `/api/content/*` | 文章管理、流水线触发 |
+| 监控 | `/api/monitor/*` | 状态、日志、任务历史 |
+| 发布 | `/api/publish/*` | 草稿创建、发布记录 |
+
 ## 依赖
+
+### 后端 (Python)
 
 - Python 3.10+
 - requests
@@ -107,6 +170,25 @@ schtasks /create /tn "WechatAI_Deep" /tr "python D:\公众号\auto_generator.py"
 - Pillow
 - tavily-python
 - python-dotenv
+- Flask
+- Flask-SQLAlchemy
+- Flask-Migrate
+- Flask-JWT-Extended
+- Flask-CORS
+- Flask-Limiter
+- marshmallow
+- bcrypt
+- waitress
+
+### 前端 (Node.js)
+
+- React 18
+- TypeScript
+- Vite
+- Ant Design 5
+- Zustand
+- Axios
+- React Router 6
 
 ## License
 
