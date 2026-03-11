@@ -1,0 +1,20 @@
+[Unit]
+Description=WeChat AI News System Web Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/wechat-ai
+Environment="PATH=/var/www/wechat-ai/venv/bin"
+ExecStart=/var/www/wechat-ai/venv/bin/python run_web.py --production --port 5000
+Restart=always
+RestartSec=10
+
+# 日志配置
+StandardOutput=append:/var/log/wechat-ai/web.log
+StandardError=append:/var/log/wechat-ai/web-error.log
+
+[Install]
+WantedBy=multi-user.target
